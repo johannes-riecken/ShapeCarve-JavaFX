@@ -38,6 +38,17 @@
             <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
+
+        <dependency>
+            <groupId>org.fxyz3d</groupId>
+            <artifactId>fxyz3d</artifactId>
+            <version>0.6.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.fxyz3d</groupId>
+            <artifactId>fxyz3d-client</artifactId>
+            <version>0.6.0</version>
+        </dependency>
     </dependencies>
 
     <build>
