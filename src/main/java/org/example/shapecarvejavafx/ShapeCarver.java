@@ -8,7 +8,7 @@ public class ShapeCarver {
     int[] dims = new int[]{16, 16, 16};
     int[] volume = new int[dims[0] * dims[1] * dims[2]];
 
-    public Output carve(int[] dims, int[][] views, final int mask_color, boolean[] skip) {
+    public Output carve(int[] dims, int[][] views, final int maskColor, boolean[] skip) {
 
         //Initialize volume
         Arrays.fill(volume, -1);
@@ -20,9 +20,9 @@ public class ShapeCarver {
             for (var s = 0; s <= dims[d] - 1; s += dims[d] - 1) {
                 var vals = new int[dims[u] * dims[v]];
                 var view = views[depth.size()];
-                var s_op = (s == 0) ? dims[d] - 1 : 0;
+                var sOp = (s == 0) ? dims[d] - 1 : 0;
                 for (var i = 0; i < vals.length; ++i) {
-                    vals[i] = (!skip[depth.size()] && view[i] == mask_color) ? s_op : s;
+                    vals[i] = (!skip[depth.size()] && view[i] == maskColor) ? sOp : s;
                 }
                 // add vals as a mutable ArrayList to depth
                 var valsList = new ArrayList<Integer>();
@@ -37,7 +37,7 @@ public class ShapeCarver {
             for (x[v] = 0; x[v] < dims[v]; ++x[v])
                 for (x[u] = 0; x[u] < dims[u]; ++x[u])
                     for (x[d] = depth.get(2 * d + 1).get(x[u] + x[v] * dims[u]); x[d] <= depth.get(2 * d).get(x[u] + x[v] * dims[u]); ++x[d]) {
-                        volume[x[0] + dims[0] * (x[1] + dims[1] * x[2])] = mask_color;
+                        volume[x[0] + dims[0] * (x[1] + dims[1] * x[2])] = maskColor;
                     }
         }
 
@@ -51,29 +51,29 @@ public class ShapeCarver {
 
                 //Do front/back sweep
                 for (var s = -1; s <= 1; s += 2) {
-                    var v_num = 2 * d + ((s < 0) ? 1 : 0);
-                    if (skip[v_num]) {
+                    var vNum = 2 * d + ((s < 0) ? 1 : 0);
+                    if (skip[vNum]) {
                         continue;
                     }
 
-                    var aview = views[v_num];
-                    var adepth = depth.get(v_num);
+                    var aview = views[vNum];
+                    var adepth = depth.get(vNum);
 
                     for (x[v] = 0; x[v] < dims[v]; ++x[v])
                         for (x[u] = 0; x[u] < dims[u]; ++x[u]) {
 
                             //March along ray
-                            var buf_idx = x[u] + x[v] * dims[u];
-                            for (x[d] = adepth.get(buf_idx); 0 <= x[d] && x[d] < dims[d]; x[d] += s) {
+                            var bufIdx = x[u] + x[v] * dims[u];
+                            for (x[d] = adepth.get(bufIdx); 0 <= x[d] && x[d] < dims[d]; x[d] += s) {
 
                                 //Read volume color
-                                var vol_idx = x[0] + dims[0] * (x[1] + dims[1] * x[2]);
-                                var color = volume[vol_idx];
-                                if (color == mask_color) {
+                                var volIdx = x[0] + dims[0] * (x[1] + dims[1] * x[2]);
+                                var color = volume[volIdx];
+                                if (color == maskColor) {
                                     continue;
                                 }
 
-                                color = volume[vol_idx] = aview[x[u] + dims[u] * x[v]];
+                                color = volume[volIdx] = aview[x[u] + dims[u] * x[v]];
 
                                 //Check photoconsistency of volume at x
                                 var consistent = true;
@@ -102,11 +102,11 @@ public class ShapeCarver {
 
                                 //Clear out voxel
                                 ++removed;
-                                volume[vol_idx] = mask_color;
+                                volume[volIdx] = maskColor;
                             }
 
                             //Update depth value
-                            adepth.set(buf_idx, x[d]);
+                            adepth.set(bufIdx, x[d]);
                         }
                 }
             }
