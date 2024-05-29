@@ -2,6 +2,7 @@ package org.example.shapecarvejavafx;
 
 import javafx.application.Application;
 import javafx.scene.*;
+import javafx.scene.control.Button;
 import javafx.scene.image.Image;
 import javafx.scene.image.WritablePixelFormat;
 import javafx.scene.input.KeyCode;
@@ -52,8 +53,8 @@ public class HelloApplication extends Application {
 
         var views = getViews();
 
-        var o = ShapeCarver.carve(new int[]{16, 16, 16}, views, 0, new boolean[]{false, false, false, false, false, false});
-        Group group = create3DContent(o);
+        Group group = groupOfBoxes(new int[]{16, 16, 16});
+
         group.getChildren().add(cameraTransform);
 
 
@@ -61,24 +62,58 @@ public class HelloApplication extends Application {
 
         setUpEvents(scene, camera, cameraTransform);
 
-        Scene rootScene = setUpRootScene(scene);
+        var carver = new ShapeCarver();
+        var output = carver.carve(new int[]{16, 16, 16}, views, 0, new boolean[]{false, false, false, false, false, false});
+        ContentCoroutine coroutine = new ContentCoroutine(output, group);
+
+        Scene rootScene = setUpRootScene(scene, coroutine);
         stage.setScene(rootScene);
         stage.show();
     }
 
-    private static Scene setUpRootScene(SubScene scene) {
+    private Group groupOfBoxes(int[] dims) {
+        var g = new Group();
+        var pos = new int[3]; // x, y, z
+        for (pos[2] = 0; pos[2] < dims[2]; pos[2]++) {
+            for (pos[1] = 0; pos[1] < dims[1]; pos[1]++) {
+                for (pos[0] = 0; pos[0] < dims[0]; pos[0]++) {
+                    var box = new Box(1, 1, 1);
+                    box.setTranslateX(pos[0]);
+                    box.setTranslateY(pos[1]);
+                    box.setTranslateZ(pos[2]);
+                    box.setMaterial(new PhongMaterial(Color.ANTIQUEWHITE));
+                    g.getChildren().add(box);
+                }
+            }
+        }
+        return g;
+    }
+
+    private static Scene setUpRootScene(SubScene scene, ContentCoroutine coroutine) {
         StackPane sp = new StackPane();
         sp.setPrefSize(800.0, 600.0);
         sp.setMaxSize(StackPane.USE_COMPUTED_SIZE, StackPane.USE_COMPUTED_SIZE);
         sp.setMinSize(StackPane.USE_COMPUTED_SIZE, StackPane.USE_COMPUTED_SIZE);
         sp.setBackground(Background.EMPTY);
         sp.getChildren().add(scene);
+        var button = new Button("Next");
+        button.setTranslateX(100);
+        button.setTranslateY(100);
+        button.setOnAction(_ -> iterate(coroutine));
+        sp.getChildren().add(button);
         sp.setPickOnBounds(false);
 
         scene.widthProperty().bind(sp.widthProperty());
         scene.heightProperty().bind(sp.heightProperty());
 
         return new Scene(sp);
+    }
+
+    private static void iterate(ContentCoroutine coroutine) {
+        if (!coroutine.isComplete()) {
+            coroutine.next();  // This will run the computation for one slice of z and then return
+            // You can add other logic here if needed between updates, such as UI refreshes or pauses
+        }
     }
 
     private void setUpEvents(SubScene scene, PerspectiveCamera camera, Xform cameraTransform) {
@@ -164,8 +199,7 @@ public class HelloApplication extends Application {
         return views;
     }
 
-    public static Group create3DContent(Output o) {
-        var g = new Group();
+    public static void create3DContent(Output o, Group g) {
         var volume = o.volume();
         var dims = o.dims();
         var pos = new int[3]; // x, y, z
@@ -173,19 +207,15 @@ public class HelloApplication extends Application {
             for (pos[1] = 0; pos[1] < dims[1]; pos[1]++) {
                 for (pos[0] = 0; pos[0] < dims[0]; pos[0]++) {
                     var color = volume[pos[0] + dims[0] * (pos[1] + dims[1] * pos[2])];
+                    var box = (Box) g.getChildren().get(pos[0] + dims[0] * (pos[1] + dims[1] * pos[2]));
                     if (color != 0) {
-                        var box = new Box(1, 1, 1);
-                        box.setTranslateX(pos[0]);
-                        box.setTranslateY(pos[1]);
-                        box.setTranslateZ(pos[2]);
                         box.setMaterial(new PhongMaterial(Color.rgb((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF)));
-                        g.getChildren().add(box);
+                    } else {
+                        box.setVisible(false);
                     }
                 }
             }
         }
-
-        return g;
     }
 
     public static void main(String[] args) {

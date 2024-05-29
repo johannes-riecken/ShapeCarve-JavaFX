@@ -3,10 +3,12 @@ package org.example.shapecarvejavafx;
 import java.util.*;
 
 public class ShapeCarver {
-    public static Output carve(int[] dims, int[][] views, final int mask_color, boolean[] skip) {
-        var x = new int[3];
-        var volume = new int[dims[0] * dims[1] * dims[2]];
-        List<List<Integer>> depth = new ArrayList<>();
+    List<List<Integer>> depth = new ArrayList<>();
+    int[] x = new int[3];
+    int[] dims = new int[]{16, 16, 16};
+    int[] volume = new int[dims[0] * dims[1] * dims[2]];
+
+    public Output carve(int[] dims, int[][] views, final int mask_color, boolean[] skip) {
 
         //Initialize volume
         Arrays.fill(volume, -1);
