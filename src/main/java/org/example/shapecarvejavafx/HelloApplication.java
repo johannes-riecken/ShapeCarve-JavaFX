@@ -16,7 +16,6 @@ import javafx.stage.Stage;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -223,11 +222,11 @@ public class HelloApplication extends Application {
         var volume = o.volume();
         var dims = o.dims();
         var pos = new int[3]; // x, y, z
-        for (pos[2] = 0; pos[2] < dims[2]; pos[2]++) {
-            for (pos[1] = 0; pos[1] < dims[1]; pos[1]++) {
-                for (pos[0] = 0; pos[0] < dims[0]; pos[0]++) {
-                    var color = volume[pos[0] + dims[0] * (pos[1] + dims[1] * pos[2])];
-                    var box = (Box) g.getChildren().get(pos[0] + dims[0] * (pos[1] + dims[1] * pos[2]));
+        for (pos[2] = 0; pos[2] < dims.get(2); pos[2]++) {
+            for (pos[1] = 0; pos[1] < dims.get(1); pos[1]++) {
+                for (pos[0] = 0; pos[0] < dims.get(0); pos[0]++) {
+                    var color = volume.get(pos[0] + dims.get(0) * (pos[1] + dims.get(1) * pos[2]));
+                    var box = (Box) g.getChildren().get(pos[0] + dims.get(0) * (pos[1] + dims.get(1) * pos[2]));
                     if (color != 0) {
                         box.setMaterial(new PhongMaterial(Color.rgb((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF)));
                     } else {

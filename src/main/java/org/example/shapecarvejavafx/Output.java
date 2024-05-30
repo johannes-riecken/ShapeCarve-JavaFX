@@ -1,22 +1,23 @@
 package org.example.shapecarvejavafx;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 
 public final class Output {
-    private final int[] volume;
-    private final int[] dims;
+    private final List<Integer> volume;
+    private final List<Integer> dims;
 
     Output(int[] volume, int[] dims) {
-        this.volume = volume;
-        this.dims = dims;
+        this.volume = Arrays.stream(volume).boxed().toList();
+        this.dims = Arrays.stream(dims).boxed().toList();
     }
 
-    public int[] volume() {
+    public List<Integer> volume() {
         return volume;
     }
 
-    public int[] dims() {
+    public List<Integer> dims() {
         return dims;
     }
 
@@ -25,19 +26,19 @@ public final class Output {
         if (obj == this) return true;
         if (obj == null || obj.getClass() != this.getClass()) return false;
         var that = (Output) obj;
-        return Arrays.equals(this.volume, that.volume) &&
-                Arrays.equals(this.dims, that.dims);
+        return this.volume.equals(that.volume) &&
+                this.dims.equals(that.dims);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(Arrays.hashCode(volume), Arrays.hashCode(dims));
+        return Objects.hash(volume.hashCode(), dims.hashCode());
     }
 
     @Override
     public String toString() {
         return "output[" +
-                "volume=" + Arrays.toString(volume) + ", " +
-                "dims=" + Arrays.toString(dims) + ']';
+                "volume=" + volume.toString() + ", " +
+                "dims=" + dims.toString() + ']';
     }
 }
