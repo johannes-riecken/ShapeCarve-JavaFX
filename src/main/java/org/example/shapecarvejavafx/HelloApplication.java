@@ -13,6 +13,12 @@ import javafx.scene.paint.Color;
 import javafx.scene.paint.PhongMaterial;
 import javafx.scene.shape.*;
 import javafx.stage.Stage;
+import org.jetbrains.annotations.NotNull;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
 
 public class HelloApplication extends Application {
     private double mouseDeltaX;
@@ -63,7 +69,7 @@ public class HelloApplication extends Application {
         setUpEvents(scene, camera, cameraTransform);
 
         var carver = new ShapeCarver();
-        var output = carver.carve(new int[]{16, 16, 16}, views, 0, new boolean[]{false, false, false, false, false, false});
+        var output = carver.carve(views, 0, new boolean[]{false, false, false, false, false, false});
         ContentCoroutine coroutine = new ContentCoroutine(output, group);
 
         Scene rootScene = setUpRootScene(scene, coroutine);
@@ -71,12 +77,15 @@ public class HelloApplication extends Application {
         stage.show();
     }
 
-    private Group groupOfBoxes(int[] dims) {
+    private @NotNull Group groupOfBoxes(int[] _dims) {
+        Objects.requireNonNull(_dims);
+        List<Integer> dims = Arrays.stream(_dims).boxed().toList();
+
         var g = new Group();
         var pos = new int[3]; // x, y, z
-        for (pos[2] = 0; pos[2] < dims[2]; pos[2]++) {
-            for (pos[1] = 0; pos[1] < dims[1]; pos[1]++) {
-                for (pos[0] = 0; pos[0] < dims[0]; pos[0]++) {
+        for (pos[2] = 0; pos[2] < dims.get(2); pos[2]++) {
+            for (pos[1] = 0; pos[1] < dims.get(1); pos[1]++) {
+                for (pos[0] = 0; pos[0] < dims.get(0); pos[0]++) {
                     var box = new Box(1, 1, 1);
                     box.setTranslateX(pos[0]);
                     box.setTranslateY(pos[1]);
@@ -90,6 +99,7 @@ public class HelloApplication extends Application {
     }
 
     private static Scene setUpRootScene(SubScene scene, ContentCoroutine coroutine) {
+        Objects.requireNonNull(scene);
         StackPane sp = new StackPane();
         sp.setPrefSize(800.0, 600.0);
         sp.setMaxSize(StackPane.USE_COMPUTED_SIZE, StackPane.USE_COMPUTED_SIZE);
@@ -110,6 +120,9 @@ public class HelloApplication extends Application {
     }
 
     private static void iterate(ContentCoroutine coroutine) {
+        if (coroutine == null) {
+            return;
+        }
         if (!coroutine.isComplete()) {
             coroutine.next();  // This will run the computation for one slice of z and then return
             // You can add other logic here if needed between updates, such as UI refreshes or pauses
@@ -117,6 +130,10 @@ public class HelloApplication extends Application {
     }
 
     private void setUpEvents(SubScene scene, PerspectiveCamera camera, Xform cameraTransform) {
+        Objects.requireNonNull(scene);
+        Objects.requireNonNull(camera);
+        Objects.requireNonNull(cameraTransform);
+
         //First person shooter keyboard movement
         scene.setOnKeyPressed(event -> {
             double change = 10.0;
@@ -179,7 +196,7 @@ public class HelloApplication extends Application {
         });
     }
 
-    private static int[][] getViews() {
+    private static int[] @NotNull [] getViews() {
         var views = new int[6][256];
         var img = new Image("file:///Users/rieckenj/Pictures/cross.png");
         var reader = img.getPixelReader();
@@ -200,6 +217,9 @@ public class HelloApplication extends Application {
     }
 
     public static void create3DContent(Output o, Group g) {
+        Objects.requireNonNull(o);
+        Objects.requireNonNull(g);
+
         var volume = o.volume();
         var dims = o.dims();
         var pos = new int[3]; // x, y, z

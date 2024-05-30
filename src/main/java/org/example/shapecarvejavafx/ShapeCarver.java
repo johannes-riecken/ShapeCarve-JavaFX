@@ -1,14 +1,18 @@
 package org.example.shapecarvejavafx;
 
+import org.jetbrains.annotations.*;
+
 import java.util.*;
 
 public class ShapeCarver {
     List<List<Integer>> depths = new ArrayList<>();
     int[] x = new int[3]; // cursor
-    int[] dims = new int[]{16, 16, 16};
+    int[] dims = new int[]{16, 16, 16}; /* cuboid shape */
     int[] volume = new int[dims[0] * dims[1] * dims[2]];
 
-    public Output carve(int[] dims /* cuboid shape */, int[][] views /* 2d images */, final int maskColor, boolean[] skip /* views to skip */) {
+    public Output carve(int[][] views /* 2d images */, final int maskColor, boolean[] skip /* views to skip */) {
+        Objects.requireNonNull(views);
+        Objects.requireNonNull(skip);
 
         //Initialize volume. This is necessary.
         Arrays.fill(volume, -1);
