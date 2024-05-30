@@ -19,6 +19,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
+import static java.util.stream.Collectors.toList;
+
 public class HelloApplication extends Application {
     private double mouseDeltaX;
     private double mouseDeltaY;
@@ -195,7 +197,7 @@ public class HelloApplication extends Application {
         });
     }
 
-    private static int[] @NotNull [] getViews() {
+    private static List<List<Integer>> getViews() {
         var views = new int[6][256];
         var img = new Image("file:///Users/rieckenj/Pictures/cross.png");
         var reader = img.getPixelReader();
@@ -212,7 +214,7 @@ public class HelloApplication extends Application {
         views[3] = pixels;
         views[4] = pixels;
         views[5] = pixels;
-        return views;
+        return Arrays.stream(views).map(e -> Arrays.stream(e).boxed().toList()).toList();
     }
 
     public static void create3DContent(Output o, Group g) {

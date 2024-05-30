@@ -10,7 +10,7 @@ public class ShapeCarver {
     int[] dims = new int[]{16, 16, 16}; /* cuboid shape */
     int[] volume = new int[dims[0] * dims[1] * dims[2]];
 
-    public Output carve(int[][] views /* 2d images */, final int maskColor, boolean[] skip /* views to skip */) {
+    public Output carve(List<List<Integer>> views /* 2d images */, final int maskColor, boolean[] skip /* views to skip */) {
         Objects.requireNonNull(views);
         Objects.requireNonNull(skip);
 
@@ -23,10 +23,10 @@ public class ShapeCarver {
             var v = (d + 2) % 3; // other axis 1
             for (var s = 0; s <= dims[d] - 1; s += dims[d] - 1) {
                 var vals = new int[dims[u] * dims[v]];
-                var view = views[depths.size()];
+                var view = views.get(depths.size());
                 var sOp = (s == 0) ? dims[d] - 1 : 0;
                 for (var i = 0; i < vals.length; ++i) {
-                    vals[i] = (!skip[depths.size()] && view[i] == maskColor) ? sOp : s;
+                    vals[i] = (!skip[depths.size()] && view.get(i) == maskColor) ? sOp : s;
                 }
                 // add vals as a mutable ArrayList to depth
                 var valsList = new ArrayList<Integer>();
@@ -38,11 +38,13 @@ public class ShapeCarver {
             }
 
             //Clear out volume
-            for (x[v] = 0; x[v] < dims[v]; ++x[v])
-                for (x[u] = 0; x[u] < dims[u]; ++x[u])
+            for (x[v] = 0; x[v] < dims[v]; ++x[v]) {
+                for (x[u] = 0; x[u] < dims[u]; ++x[u]) {
                     for (x[d] = depths.get(2 * d + 1).get(x[u] + x[v] * dims[u]); x[d] <= depths.get(2 * d).get(x[u] + x[v] * dims[u]); ++x[d]) {
                         volume[x[0] + dims[0] * (x[1] + dims[1] * x[2])] = maskColor;
                     }
+                }
+            }
         }
 
         //Perform iterative seam carving until convergence
@@ -60,7 +62,7 @@ public class ShapeCarver {
                         continue;
                     }
 
-                    var view = views[vNum];
+                    var view = views.get(vNum);
                     var depth = depths.get(vNum);
 
                     for (x[v] = 0; x[v] < dims[v]; ++x[v])
@@ -77,7 +79,7 @@ public class ShapeCarver {
                                     continue;
                                 }
 
-                                color = volume[volIdx] = view[x[u] + dims[u] * x[v]];
+                                color = volume[volIdx] = view.get(x[u] + dims[u] * x[v]);
 
                                 //Check photo-consistency of volume at x
                                 var consistent = true;
@@ -90,7 +92,7 @@ public class ShapeCarver {
                                         if (skip[fnum]) {
                                             continue;
                                         }
-                                        var fcolor = views[fnum][idx];
+                                        var fcolor = views.get(fnum).get(idx);
                                         var fdepth = depths.get(fnum).get(idx);
                                         if (t != 0 ? fdepth <= x[a] : x[a] <= fdepth) {
                                             if (fcolor != color) {
