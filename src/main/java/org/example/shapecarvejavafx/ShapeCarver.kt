@@ -1,136 +1,165 @@
-package org.example.shapecarvejavafx;
+package org.example.shapecarvejavafx
 
-import org.jetbrains.annotations.*;
+import java.util.*
 
-import java.util.*;
+class ShapeCarver {
+    var depths: MutableList<MutableList<Int>> = ArrayList()
+    var x: IntArray = IntArray(3) // cursor
+    var dims: IntArray = intArrayOf(16, 16, 16) /* cuboid shape */
+    var volume: IntArray = IntArray(dims[0] * dims[1] * dims[2])
 
-public class ShapeCarver {
-    List<List<Integer>> depths = new ArrayList<>();
-    int[] x = new int[3]; // cursor
-    int[] dims = new int[]{16, 16, 16}; /* cuboid shape */
-    int[] volume = new int[dims[0] * dims[1] * dims[2]];
-
-    public Output carve(List<List<Integer>> views /* 2d images */, final int maskColor, boolean[] skip /* views to skip */) {
-        Objects.requireNonNull(views);
-        Objects.requireNonNull(skip);
+    fun carve(
+        views: List<List<Int>>,  /* 2d images */
+        maskColor: Int, skip: BooleanArray /* views to skip */
+    ): Output {
+        Objects.requireNonNull(views)
+        Objects.requireNonNull(skip)
 
         //Initialize volume. This is necessary.
-        Arrays.fill(volume, -1);
+        Arrays.fill(volume, -1)
 
         //Initialize depth fields
-        for (var d = 0 /* axis */; d < 3; ++d) {
-            var u = (d + 1) % 3; // other axis 0
-            var v = (d + 2) % 3; // other axis 1
-            for (var s = 0; s <= dims[d] - 1; s += dims[d] - 1) {
-                var vals = new int[dims[u] * dims[v]];
-                var view = views.get(depths.size());
-                var sOp = (s == 0) ? dims[d] - 1 : 0;
-                for (var i = 0; i < vals.length; ++i) {
-                    vals[i] = (!skip[depths.size()] && view.get(i) == maskColor) ? sOp : s;
+        for (d in 0 /* axis */..2) {
+            val u = (d + 1) % 3 // other axis 0
+            val v = (d + 2) % 3 // other axis 1
+            var s = 0
+            while (s <= dims[d] - 1) {
+                val vals = IntArray(dims[u] * dims[v])
+                val view = views[depths.size]
+                val sOp = if ((s == 0)) dims[d] - 1 else 0
+                for (i in vals.indices) {
+                    vals[i] = if ((!skip[depths.size] && view[i] == maskColor)) sOp else s
                 }
                 // add vals as a mutable ArrayList to depth
-                var valsList = new ArrayList<Integer>();
-                for (var val : vals) {
-                    valsList.add(val);
+                val valsList = ArrayList<Int>()
+                for (`val` in vals) {
+                    valsList.add(`val`)
                 }
-                depths.add(valsList);
+                depths.add(valsList)
 
+                s += dims[d] - 1
             }
 
             //Clear out volume
-            for (x[v] = 0; x[v] < dims[v]; ++x[v]) {
-                for (x[u] = 0; x[u] < dims[u]; ++x[u]) {
-                    for (x[d] = depths.get(2 * d + 1).get(x[u] + x[v] * dims[u]); x[d] <= depths.get(2 * d).get(x[u] + x[v] * dims[u]); ++x[d]) {
-                        volume[x[0] + dims[0] * (x[1] + dims[1] * x[2])] = maskColor;
+            x[v] = 0
+            while (x[v] < dims[v]) {
+                x[u] = 0
+                while (x[u] < dims[u]) {
+                    x[d] = depths[2 * d + 1][x[u] + x[v] * dims[u]]
+                    while (x[d] <= depths[2 * d][x[u] + x[v] * dims[u]]) {
+                        volume[x[0] + dims[0] * (x[1] + dims[1] * x[2])] = maskColor
+                        ++x[d]
                     }
+                    ++x[u]
                 }
+                ++x[v]
             }
         }
 
         //Perform iterative seam carving until convergence
-        var removed = 1;
+        var removed = 1
         while (removed > 0) {
-            removed = 0;
-            for (var d = 0; d < 3; ++d) {
-                var u = (d + 1) % 3;
-                var v = (d + 2) % 3;
+            removed = 0
+            for (d in 0..2) {
+                val u = (d + 1) % 3
+                val v = (d + 2) % 3
 
                 //Do front/back sweep
-                for (var s = -1; s <= 1; s += 2) {
-                    var vNum = 2 * d + ((s < 0) ? 1 : 0);
+                var s = -1
+                while (s <= 1) {
+                    val vNum = 2 * d + (if ((s < 0)) 1 else 0)
                     if (skip[vNum]) {
-                        continue;
+                        s += 2
+                        continue
                     }
 
-                    var view = views.get(vNum);
-                    var depth = depths.get(vNum);
+                    val view = views[vNum]
+                    val depth = depths[vNum]
 
-                    for (x[v] = 0; x[v] < dims[v]; ++x[v])
-                        for (x[u] = 0; x[u] < dims[u]; ++x[u]) {
-
+                    x[v] = 0
+                    while (x[v] < dims[v]) {
+                        x[u] = 0
+                        while (x[u] < dims[u]) {
                             //March along ray
-                            var bufIdx = x[u] + x[v] * dims[u];
-                            for (x[d] = depth.get(bufIdx); 0 <= x[d] && x[d] < dims[d]; x[d] += s) {
-
+                            val bufIdx = x[u] + x[v] * dims[u]
+                            x[d] = depth[bufIdx]
+                            while (0 <= x[d] && x[d] < dims[d]) {
                                 //Read volume color
-                                var volIdx = x[0] + dims[0] * (x[1] + dims[1] * x[2]);
-                                var color = volume[volIdx];
+                                val volIdx = x[0] + dims[0] * (x[1] + dims[1] * x[2])
+                                var color = volume[volIdx]
                                 if (color == maskColor) {
-                                    continue;
+                                    x[d] += s
+                                    continue
                                 }
 
-                                color = volume[volIdx] = view.get(x[u] + dims[u] * x[v]);
+                                volume[volIdx] = view[x[u] + dims[u] * x[v]]
+                                color = volume[volIdx]
 
                                 //Check photo-consistency of volume at x
-                                var consistent = true;
-                                for (var a = 0; consistent && a < 3; ++a) {
-                                    var b = (a + 1) % 3;
-                                    var c = (a + 2) % 3;
-                                    var idx = x[b] + dims[b] * x[c];
-                                    for (var t = 0; t < 2; ++t) {
-                                        var fnum = 2 * a + t;
+                                var consistent = true
+                                var a = 0
+                                while (consistent && a < 3) {
+                                    val b = (a + 1) % 3
+                                    val c = (a + 2) % 3
+                                    val idx = x[b] + dims[b] * x[c]
+                                    for (t in 0..1) {
+                                        val fnum = 2 * a + t
                                         if (skip[fnum]) {
-                                            continue;
+                                            continue
                                         }
-                                        var fcolor = views.get(fnum).get(idx);
-                                        var fdepth = depths.get(fnum).get(idx);
-                                        if (t != 0 ? fdepth <= x[a] : x[a] <= fdepth) {
+                                        val fcolor = views[fnum][idx]
+                                        val fdepth = depths[fnum][idx]
+                                        if (if (t != 0) fdepth <= x[a] else x[a] <= fdepth) {
                                             if (fcolor != color) {
-                                                consistent = false;
-                                                break;
+                                                consistent = false
+                                                break
                                             }
                                         }
                                     }
+                                    ++a
                                 }
                                 if (consistent) {
-                                    break;
+                                    break
                                 }
 
                                 //Clear out voxel
-                                ++removed;
-                                volume[volIdx] = maskColor;
+                                ++removed
+                                volume[volIdx] = maskColor
+                                x[d] += s
                             }
 
                             //Update depth value
-                            depth.set(bufIdx, x[d]);
+                            depth[bufIdx] = x[d]
+                            ++x[u]
                         }
+                        ++x[v]
+                    }
+                    s += 2
                 }
             }
         }
 
         //Do a final pass to fill in any missing colors
-        var n = 0; // linear index. See loop invariant below
-        for (x[2] = 0; x[2] < dims[2]; ++x[2])
-            for (x[1] = 0; x[1] < dims[1]; ++x[1])
-                for (x[0] = 0; x[0] < dims[0]; ++x[0], ++n) {
-                    assert n == x[0] + dims[0] * (x[1] + dims[1] * x[2]);
+        var n = 0 // linear index. See loop invariant below
+        x[2] = 0
+        while (x[2] < dims[2]) {
+            x[1] = 0
+            while (x[1] < dims[1]) {
+                x[0] = 0
+                while (x[0] < dims[0]) {
+//                    assert(n == x[0] + dims[0] * (x[1] + dims[1] * x[2]))
                     if (volume[n] < 0) {
-                        volume[n] = 0xff00ff;
+                        volume[n] = 0xff00ff
                     }
+                    ++x[0]
+                    ++n
                 }
+                ++x[1]
+            }
+            ++x[2]
+        }
 
-        return new Output(volume, dims);
-
+        return Output(volume, dims)
     }
 }
 

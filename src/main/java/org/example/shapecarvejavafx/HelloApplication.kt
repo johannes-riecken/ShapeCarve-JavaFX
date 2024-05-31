@@ -1,245 +1,262 @@
-package org.example.shapecarvejavafx;
+package org.example.shapecarvejavafx
 
-import javafx.application.Application;
-import javafx.scene.*;
-import javafx.scene.control.Button;
-import javafx.scene.image.Image;
-import javafx.scene.image.WritablePixelFormat;
-import javafx.scene.input.KeyCode;
-import javafx.scene.input.MouseEvent;
-import javafx.scene.layout.Background;
-import javafx.scene.layout.StackPane;
-import javafx.scene.paint.Color;
-import javafx.scene.paint.PhongMaterial;
-import javafx.scene.shape.*;
-import javafx.stage.Stage;
-import org.jetbrains.annotations.NotNull;
+import javafx.application.Application
+import javafx.event.ActionEvent
+import javafx.event.EventHandler
+import javafx.scene.*
+import javafx.scene.control.Button
+import javafx.scene.image.Image
+import javafx.scene.image.WritablePixelFormat
+import javafx.scene.input.KeyCode
+import javafx.scene.input.KeyEvent
+import javafx.scene.input.MouseEvent
+import javafx.scene.layout.Background
+import javafx.scene.layout.StackPane
+import javafx.scene.paint.Color
+import javafx.scene.paint.PhongMaterial
+import javafx.scene.shape.Box
+import javafx.stage.Stage
+import java.util.*
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
+class HelloApplication : Application() {
+    private var mouseDeltaX = 0.0
+    private var mouseDeltaY = 0.0
+    private var mouseOldX = 0.0
+    private var mouseOldY = 0.0
+    private var mousePosX = 0.0
+    private var mousePosY = 0.0
 
-import static java.util.stream.Collectors.toList;
+    override fun start(stage: Stage) {
+        val sceneWidth = 800.0
+        val sceneHeight = 600.0
+        val cameraTransform = Xform()
 
-public class HelloApplication extends Application {
-    private double mouseDeltaX;
-    private double mouseDeltaY;
-    private double mouseOldX;
-    private double mouseOldY;
-    private double mousePosX;
-    private double mousePosY;
-
-    @Override
-    public void start(Stage stage) {
-
-        PerspectiveCamera camera;
-        final double sceneWidth = 800;
-        final double sceneHeight = 600;
-        final Xform cameraTransform = new Xform();
-
-        Group sceneRoot = new Group();
-        SubScene scene = new SubScene(sceneRoot, sceneWidth, sceneHeight, true, SceneAntialiasing.BALANCED);
-        scene.setFill(Color.ALICEBLUE);
-        camera = new PerspectiveCamera(true);
+        val sceneRoot = Group()
+        val scene = SubScene(sceneRoot, sceneWidth, sceneHeight, true, SceneAntialiasing.BALANCED)
+        scene.fill = Color.ALICEBLUE
+        val camera = PerspectiveCamera(true)
 
         //setup camera transform for rotational support
-        cameraTransform.setTranslate(0, 0, 0);
-        cameraTransform.getChildren().add(camera);
-        camera.setNearClip(0.1);
-        camera.setFarClip(10000.0);
-        camera.setTranslateZ(-70);
-        camera.setTranslateX(10);
-        cameraTransform.ry.setAngle(-35.0);
-        cameraTransform.rx.setAngle(-10.0);
-        PointLight light = new PointLight(Color.WHITE);
-        cameraTransform.getChildren().add(light);
-        light.setTranslateX(camera.getTranslateX());
-        light.setTranslateY(camera.getTranslateY());
-        light.setTranslateZ(camera.getTranslateZ());
-        scene.setCamera(camera);
+        cameraTransform.setTranslate(0.0, 0.0, 0.0)
+        cameraTransform.children.add(camera)
+        camera.nearClip = 0.1
+        camera.farClip = 10000.0
+        camera.translateZ = -70.0
+        camera.translateX = 10.0
+        cameraTransform.ry.angle = -35.0
+        cameraTransform.rx.angle = -10.0
+        val light = PointLight(Color.WHITE)
+        cameraTransform.children.add(light)
+        light.translateX = camera.translateX
+        light.translateY = camera.translateY
+        light.translateZ = camera.translateZ
+        scene.camera = camera
 
-        var views = getViews();
+        val views = views
 
-        Group group = groupOfBoxes(new int[]{16, 16, 16});
+        val group = groupOfBoxes(intArrayOf(16, 16, 16))
 
-        group.getChildren().add(cameraTransform);
+        group.children.add(cameraTransform)
 
 
-        sceneRoot.getChildren().addAll(group);
+        sceneRoot.children.addAll(group)
 
-        setUpEvents(scene, camera, cameraTransform);
+        setUpEvents(scene, camera, cameraTransform)
 
-        var carver = new ShapeCarver();
-        var output = carver.carve(views, 0, new boolean[]{false, false, false, false, false, false});
-        ContentCoroutine coroutine = new ContentCoroutine(output, group);
+        val carver = ShapeCarver()
+        val output = carver.carve(views, 0, booleanArrayOf(false, false, false, false, false, false))
+        val coroutine = ContentCoroutine(output, group)
 
-        Scene rootScene = setUpRootScene(scene, coroutine);
-        stage.setScene(rootScene);
-        stage.show();
+        val rootScene = setUpRootScene(scene, coroutine)
+        stage.scene = rootScene
+        stage.show()
     }
 
-    private @NotNull Group groupOfBoxes(int[] _dims) {
-        Objects.requireNonNull(_dims);
-        List<Integer> dims = Arrays.stream(_dims).boxed().toList();
+    private fun groupOfBoxes(_dims: IntArray): Group {
+        Objects.requireNonNull(_dims)
+        val dims = Arrays.stream(_dims).boxed().toList()
 
-        var g = new Group();
-        var pos = new int[3]; // x, y, z
-        for (pos[2] = 0; pos[2] < dims.get(2); pos[2]++) {
-            for (pos[1] = 0; pos[1] < dims.get(1); pos[1]++) {
-                for (pos[0] = 0; pos[0] < dims.get(0); pos[0]++) {
-                    var box = new Box(1, 1, 1);
-                    box.setTranslateX(pos[0]);
-                    box.setTranslateY(pos[1]);
-                    box.setTranslateZ(pos[2]);
-                    box.setMaterial(new PhongMaterial(Color.ANTIQUEWHITE));
-                    g.getChildren().add(box);
+        val g = Group()
+        val pos = IntArray(3) // x, y, z
+        pos[2] = 0
+        while (pos[2] < dims[2]) {
+            pos[1] = 0
+            while (pos[1] < dims[1]) {
+                pos[0] = 0
+                while (pos[0] < dims[0]) {
+                    val box = Box(1.0, 1.0, 1.0)
+                    box.translateX = pos[0].toDouble()
+                    box.translateY = pos[1].toDouble()
+                    box.translateZ = pos[2].toDouble()
+                    box.material = PhongMaterial(Color.ANTIQUEWHITE)
+                    g.children.add(box)
+                    pos[0]++
                 }
+                pos[1]++
             }
+            pos[2]++
         }
-        return g;
+        return g
     }
 
-    private static Scene setUpRootScene(SubScene scene, ContentCoroutine coroutine) {
-        Objects.requireNonNull(scene);
-        StackPane sp = new StackPane();
-        sp.setPrefSize(800.0, 600.0);
-        sp.setMaxSize(StackPane.USE_COMPUTED_SIZE, StackPane.USE_COMPUTED_SIZE);
-        sp.setMinSize(StackPane.USE_COMPUTED_SIZE, StackPane.USE_COMPUTED_SIZE);
-        sp.setBackground(Background.EMPTY);
-        sp.getChildren().add(scene);
-        var button = new Button("Next");
-        button.setTranslateX(100);
-        button.setTranslateY(100);
-        button.setOnAction(_ -> iterate(coroutine));
-        sp.getChildren().add(button);
-        sp.setPickOnBounds(false);
-
-        scene.widthProperty().bind(sp.widthProperty());
-        scene.heightProperty().bind(sp.heightProperty());
-
-        return new Scene(sp);
-    }
-
-    private static void iterate(ContentCoroutine coroutine) {
-        if (coroutine == null) {
-            return;
-        }
-        if (!coroutine.isComplete()) {
-            coroutine.next();  // This will run the computation for one slice of z and then return
-            // You can add other logic here if needed between updates, such as UI refreshes or pauses
-        }
-    }
-
-    private void setUpEvents(SubScene scene, PerspectiveCamera camera, Xform cameraTransform) {
-        Objects.requireNonNull(scene);
-        Objects.requireNonNull(camera);
-        Objects.requireNonNull(cameraTransform);
+    private fun setUpEvents(scene: SubScene, camera: PerspectiveCamera, cameraTransform: Xform) {
+        Objects.requireNonNull(scene)
+        Objects.requireNonNull(camera)
+        Objects.requireNonNull(cameraTransform)
 
         //First person shooter keyboard movement
-        scene.setOnKeyPressed(event -> {
-            double change = 10.0;
+        scene.onKeyPressed = EventHandler { event: KeyEvent ->
+            var change = 10.0
             //Add shift modifier to simulate "Running Speed"
-            if (event.isShiftDown()) {
-                change = 50.0;
+            if (event.isShiftDown) {
+                change = 50.0
             }
             //What key did the user press?
-            KeyCode keycode = event.getCode();
+            val keycode = event.code
             //Step 2c: Add Zoom controls
             if (keycode == KeyCode.W) {
-                camera.setTranslateZ(camera.getTranslateZ() + change);
+                camera.translateZ = camera.translateZ + change
             }
             if (keycode == KeyCode.S) {
-                camera.setTranslateZ(camera.getTranslateZ() - change);
+                camera.translateZ = camera.translateZ - change
             }
             //Step 2d:  Add Strafe controls
             if (keycode == KeyCode.A) {
-                camera.setTranslateX(camera.getTranslateX() - change);
+                camera.translateX = camera.translateX - change
             }
             if (keycode == KeyCode.D) {
-                camera.setTranslateX(camera.getTranslateX() + change);
+                camera.translateX = camera.translateX + change
             }
-        });
-
-        scene.setOnMousePressed((MouseEvent me) -> {
-            mousePosX = me.getSceneX();
-            mousePosY = me.getSceneY();
-            mouseOldX = me.getSceneX();
-            mouseOldY = me.getSceneY();
-        });
-        scene.setOnMouseDragged((MouseEvent me) -> {
-            mouseOldX = mousePosX;
-            mouseOldY = mousePosY;
-            mousePosX = me.getSceneX();
-            mousePosY = me.getSceneY();
-            mouseDeltaX = (mousePosX - mouseOldX);
-            mouseDeltaY = (mousePosY - mouseOldY);
-
-            double modifier = 10.0;
-            double modifierFactor = 0.1;
-
-            if (me.isControlDown()) {
-                modifier = 0.1;
-            }
-            if (me.isShiftDown()) {
-                modifier = 50.0;
-            }
-            if (me.isPrimaryButtonDown()) {
-                cameraTransform.ry.setAngle(((cameraTransform.ry.getAngle() + mouseDeltaX * modifierFactor * modifier * 2.0) % 360 + 540) % 360 - 180);  // +
-                cameraTransform.rx.setAngle(((cameraTransform.rx.getAngle() - mouseDeltaY * modifierFactor * modifier * 2.0) % 360 + 540) % 360 - 180);  // -
-            } else if (me.isSecondaryButtonDown()) {
-                double z = camera.getTranslateZ();
-                double newZ = z + mouseDeltaX * modifierFactor * modifier;
-                camera.setTranslateZ(newZ);
-            } else if (me.isMiddleButtonDown()) {
-                cameraTransform.t.setX(cameraTransform.t.getX() + mouseDeltaX * modifierFactor * modifier * 0.3);  // -
-                cameraTransform.t.setY(cameraTransform.t.getY() + mouseDeltaY * modifierFactor * modifier * 0.3);  // -
-            }
-        });
-    }
-
-    private static List<List<Integer>> getViews() {
-        var views = new int[6][256];
-        var img = new Image("file:///Users/rieckenj/Pictures/cross.png");
-        var reader = img.getPixelReader();
-        var width = (int) img.getWidth();
-        var height = (int) img.getHeight();
-        var pixels = new int[width * height];
-        reader.getPixels(0, 0, width, height, WritablePixelFormat.getIntArgbInstance(), pixels, 0, width);
-        for (int i = 0; i < pixels.length; i++) {
-            pixels[i] = pixels[i] & 0x00ffffff; // discard transparency value
         }
-        views[0] = pixels;
-        views[1] = pixels;
-        views[2] = pixels;
-        views[3] = pixels;
-        views[4] = pixels;
-        views[5] = pixels;
-        return Arrays.stream(views).map(e -> Arrays.stream(e).boxed().toList()).toList();
+
+        scene.onMousePressed = EventHandler { me: MouseEvent ->
+            mousePosX = me.sceneX
+            mousePosY = me.sceneY
+            mouseOldX = me.sceneX
+            mouseOldY = me.sceneY
+        }
+        scene.onMouseDragged = EventHandler { me: MouseEvent ->
+            mouseOldX = mousePosX
+            mouseOldY = mousePosY
+            mousePosX = me.sceneX
+            mousePosY = me.sceneY
+            mouseDeltaX = (mousePosX - mouseOldX)
+            mouseDeltaY = (mousePosY - mouseOldY)
+
+            var modifier = 10.0
+            val modifierFactor = 0.1
+
+            if (me.isControlDown) {
+                modifier = 0.1
+            }
+            if (me.isShiftDown) {
+                modifier = 50.0
+            }
+            if (me.isPrimaryButtonDown) {
+                cameraTransform.ry.angle =
+                    ((cameraTransform.ry.angle + mouseDeltaX * modifierFactor * modifier * 2.0) % 360 + 540) % 360 - 180 // +
+                cameraTransform.rx.angle =
+                    ((cameraTransform.rx.angle - mouseDeltaY * modifierFactor * modifier * 2.0) % 360 + 540) % 360 - 180 // -
+            } else if (me.isSecondaryButtonDown) {
+                val z = camera.translateZ
+                val newZ = z + mouseDeltaX * modifierFactor * modifier
+                camera.translateZ = newZ
+            } else if (me.isMiddleButtonDown) {
+                cameraTransform.t.x = cameraTransform.t.x + mouseDeltaX * modifierFactor * modifier * 0.3 // -
+                cameraTransform.t.y = cameraTransform.t.y + mouseDeltaY * modifierFactor * modifier * 0.3 // -
+            }
+        }
     }
 
-    public static void create3DContent(Output o, Group g) {
-        Objects.requireNonNull(o);
-        Objects.requireNonNull(g);
+    companion object {
+        private fun setUpRootScene(scene: SubScene, coroutine: ContentCoroutine): Scene {
+            Objects.requireNonNull(scene)
+            val sp = StackPane()
+            sp.setPrefSize(800.0, 600.0)
+            sp.setMaxSize(StackPane.USE_COMPUTED_SIZE, StackPane.USE_COMPUTED_SIZE)
+            sp.setMinSize(StackPane.USE_COMPUTED_SIZE, StackPane.USE_COMPUTED_SIZE)
+            sp.background = Background.EMPTY
+            sp.children.add(scene)
+            val button = Button("Next")
+            button.translateX = 100.0
+            button.translateY = 100.0
+            button.onAction = EventHandler { `_`: ActionEvent? -> iterate(coroutine) }
+            sp.children.add(button)
+            sp.isPickOnBounds = false
 
-        var volume = o.volume();
-        var dims = o.dims();
-        var pos = new int[3]; // x, y, z
-        for (pos[2] = 0; pos[2] < dims.get(2); pos[2]++) {
-            for (pos[1] = 0; pos[1] < dims.get(1); pos[1]++) {
-                for (pos[0] = 0; pos[0] < dims.get(0); pos[0]++) {
-                    var color = volume.get(pos[0] + dims.get(0) * (pos[1] + dims.get(1) * pos[2]));
-                    var box = (Box) g.getChildren().get(pos[0] + dims.get(0) * (pos[1] + dims.get(1) * pos[2]));
-                    if (color != 0) {
-                        box.setMaterial(new PhongMaterial(Color.rgb((color >> 16) & 0xFF, (color >> 8) & 0xFF, color & 0xFF)));
-                    } else {
-                        box.setVisible(false);
-                    }
+            scene.widthProperty().bind(sp.widthProperty())
+            scene.heightProperty().bind(sp.heightProperty())
+
+            return Scene(sp)
+        }
+
+        private fun iterate(coroutine: ContentCoroutine?) {
+            if (coroutine == null) {
+                return
+            }
+            if (!coroutine.isComplete) {
+                coroutine.next() // This will run the computation for one slice of z and then return
+                // You can add other logic here if needed between updates, such as UI refreshes or pauses
+            }
+        }
+
+        private val views: List<List<Int>>
+            get() {
+                val views = Array(6) { IntArray(256) }
+                val img = Image("file:///Users/rieckenj/Pictures/cross.png")
+                val reader = img.pixelReader
+                val width = img.width.toInt()
+                val height = img.height.toInt()
+                val pixels = IntArray(width * height)
+                reader.getPixels(0, 0, width, height, WritablePixelFormat.getIntArgbInstance(), pixels, 0, width)
+                for (i in pixels.indices) {
+                    pixels[i] = pixels[i] and 0x00ffffff // discard transparency value
                 }
+                views[0] = pixels
+                views[1] = pixels
+                views[2] = pixels
+                views[3] = pixels
+                views[4] = pixels
+                views[5] = pixels
+                return Arrays.stream(views).map { e: IntArray? -> Arrays.stream(e).boxed().toList() }
+                    .toList()
+            }
+
+        fun create3DContent(o: Output, g: Group) {
+            Objects.requireNonNull(o)
+            Objects.requireNonNull(g)
+
+            val volume = o.volume()
+            val dims = o.dims()
+            val pos = IntArray(3) // x, y, z
+            pos[2] = 0
+            while (pos[2] < dims[2]) {
+                pos[1] = 0
+                while (pos[1] < dims[1]) {
+                    pos[0] = 0
+                    while (pos[0] < dims[0]) {
+                        val color = volume[pos[0] + dims[0] * (pos[1] + dims[1] * pos[2])]
+                        val box = g.children[pos[0] + dims[0] * (pos[1] + dims[1] * pos[2])] as Box
+                        if (color != 0) {
+                            box.material = PhongMaterial(
+                                Color.rgb(
+                                    (color shr 16) and 0xFF,
+                                    color shr 8 and 0xFF,
+                                    color and 0xFF
+                                )
+                            )
+                        } else {
+                            box.isVisible = false
+                        }
+                        pos[0]++
+                    }
+                    pos[1]++
+                }
+                pos[2]++
             }
         }
-    }
-
-    public static void main(String[] args) {
-        launch();
-    }
+   }
+}
+fun main() {
+    Application.launch(HelloApplication::class.java)
 }
