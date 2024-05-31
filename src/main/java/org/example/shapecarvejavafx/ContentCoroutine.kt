@@ -6,8 +6,8 @@ import javafx.scene.paint.PhongMaterial
 import javafx.scene.shape.Box
 
 class ContentCoroutine(o: Output, private val group: Group) {
-    private val dims: List<Int> = o.dims()
-    private val volume: List<Int> = o.volume()
+    private val dims: IntArray = o.dims
+    private val volume: IntArray = o.volume
     private val pos = IntArray(3) // x, y, z initialized to 0,0,0
     var isComplete: Boolean = false
         private set

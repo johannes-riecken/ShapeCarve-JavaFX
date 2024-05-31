@@ -226,8 +226,8 @@ class HelloApplication : Application() {
             Objects.requireNonNull(o)
             Objects.requireNonNull(g)
 
-            val volume = o.volume()
-            val dims = o.dims()
+            val volume = o.volume
+            val dims = o.dims
             val pos = IntArray(3) // x, y, z
             pos[2] = 0
             while (pos[2] < dims[2]) {
