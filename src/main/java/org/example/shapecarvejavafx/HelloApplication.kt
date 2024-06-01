@@ -64,6 +64,7 @@ class HelloApplication : Application() {
         setUpEvents(scene, camera, cameraTransform)
 
         val carver = ShapeCarver()
+        val views = getViews()
         val output = carver.carve(views, 0, booleanArrayOf(false, false, false, false, false, false))
         val coroutine = ContentCoroutine(output, group)
 
@@ -157,6 +158,27 @@ class HelloApplication : Application() {
         }
     }
 
+    private fun getViews(): List<List<Int>> {
+        val views = Array(6) { IntArray(256) }
+        val urls = parameters.raw
+        return urls.map { url ->
+            getView(url).toList()
+        }
+    }
+
+    private fun getView(url: String): IntArray {
+        val img = Image(url)
+        val reader = img.pixelReader
+        val width = img.width.toInt()
+        val height = img.height.toInt()
+        val pixels = IntArray(width * height)
+        reader.getPixels(0, 0, width, height, WritablePixelFormat.getIntArgbInstance(), pixels, 0, width)
+        for (i in pixels.indices) {
+            pixels[i] = pixels[i] and 0x00ffffff // discard transparency value
+        }
+        return pixels
+    }
+
     companion object {
         private fun setUpRootScene(scene: SubScene, coroutine: ContentCoroutine): Scene {
             val sp = StackPane().apply {
@@ -191,18 +213,6 @@ class HelloApplication : Application() {
             }
         }
 
-        private val views: List<List<Int>>
-            get() {
-                val img = Image("file:///Users/rieckenj/Pictures/cross.png")
-                val reader = img.pixelReader
-                val width = img.width.toInt()
-                val height = img.height.toInt()
-                val pixels = IntArray(width * height).apply {
-                    reader.getPixels(0, 0, width, height, WritablePixelFormat.getIntArgbInstance(), this, 0, width)
-                }.map { it and 0x00ffffff } // discard transparency value
-                return List(6) { pixels }
-            }
-
         fun create3DContent(o: Output, g: Group) {
             val volume = o.volume
             val dims = o.dims
@@ -234,6 +244,6 @@ class HelloApplication : Application() {
     }
 }
 
-fun main() {
-    Application.launch(HelloApplication::class.java)
+fun main(vararg args: String) {
+    Application.launch(HelloApplication::class.java, *args)
 }

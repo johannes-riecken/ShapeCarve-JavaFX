@@ -10,7 +10,6 @@ class ShapeCarver {
         views: List<List<Int>>,  // 2d images
         maskColor: Int, skip: BooleanArray // views to skip
     ): Output {
-        require(views.isNotEmpty())
         require(skip.isNotEmpty())
 
         // Initialize volume
