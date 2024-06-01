@@ -10,9 +10,7 @@ import kotlinx.coroutines.channels.Channel
 class ContentCoroutine(output: Output, private val group: Group) {
     private val dims: IntArray = output.dims
     private val volume: IntArray = output.volume
-    private val channel = Channel<Unit>()
-    var isComplete: Boolean = false
-        private set
+    val channel = Channel<Unit>()
 
     init {
         CoroutineScope(Dispatchers.Default).launch {
@@ -44,13 +42,6 @@ class ContentCoroutine(output: Output, private val group: Group) {
             }
             channel.send(Unit)
         }
-        isComplete = true
         channel.close()
-    }
-
-    suspend fun next() {
-        if (!isComplete) {
-            channel.receive()
-        }
     }
 }

@@ -180,7 +180,7 @@ class HelloApplication : Application() {
     }
 
     companion object {
-        private fun setUpRootScene(scene: SubScene, coroutine: ContentCoroutine): Scene {
+        private fun setUpRootScene(scene: SubScene, coroutine: ContentCoroutine?): Scene {
             val sp = StackPane().apply {
                 prefWidth = 800.0
                 prefHeight = 600.0
@@ -195,22 +195,19 @@ class HelloApplication : Application() {
             val button = Button("Next").apply {
                 translateX = 100.0
                 translateY = 100.0
-                setOnAction { iterate(coroutine) }
+                setOnAction {
+                    CoroutineScope(Dispatchers.Main).launch {
+                        if (coroutine != null && !coroutine.channel.isEmpty) {
+                            coroutine.channel.receive()
+                        }
+                    }
+                }
             }
             sp.children.add(button)
             scene.widthProperty().bind(sp.widthProperty())
             scene.heightProperty().bind(sp.heightProperty())
 
             return Scene(sp)
-        }
-
-        private fun iterate(coroutine: ContentCoroutine?) {
-            coroutine ?: return
-            // To move to the next slice:
-            CoroutineScope(Dispatchers.Main).launch {
-                coroutine.next()
-                // Optionally add a delay here to control the processing speed
-            }
         }
 
         fun create3DContent(o: Output, g: Group) {
