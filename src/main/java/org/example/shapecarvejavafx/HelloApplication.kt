@@ -1,6 +1,7 @@
 package org.example.shapecarvejavafx
 
 import javafx.application.Application
+import javafx.beans.property.SimpleIntegerProperty
 import javafx.scene.*
 import javafx.scene.control.Button
 import javafx.scene.image.Image
@@ -63,10 +64,13 @@ class HelloApplication : Application() {
 
         setUpEvents(scene, camera, cameraTransform)
 
-        val carver = ShapeCarver()
+        var dims: IntArray = intArrayOf(16, 16, 16) // cuboid shape
+        var volume: MutableList<SimpleIntegerProperty> = MutableList(dims[0] * dims[1] * dims[2]) { _ -> SimpleIntegerProperty(-1) }
+        val output = Output(volume, dims)
+        val carver = ShapeCarver(output)
         val views = getViews()
-        val output = carver.carve(views, 0, booleanArrayOf(false, false, false, false, false, false))
         val coroutine = ContentCoroutine(output, group)
+        carver.carve(views, 0, booleanArrayOf(false, false, false, false, false, false))
 
         val rootScene = setUpRootScene(scene, coroutine)
         stage.scene = rootScene

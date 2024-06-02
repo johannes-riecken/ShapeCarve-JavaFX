@@ -1,6 +1,6 @@
 package org.example.shapecarvejavafx
 
-import javafx.beans.value.WritableIntegerValue
+import javafx.beans.property.SimpleIntegerProperty
 import javafx.scene.Group
 import javafx.scene.paint.Color
 import javafx.scene.paint.PhongMaterial
@@ -10,13 +10,11 @@ import kotlinx.coroutines.channels.Channel
 
 class ContentCoroutine(output: Output, private val group: Group) {
     private val dims: IntArray = output.dims
-    private val volume: List<WritableIntegerValue> = output.volume
+    private val volume: List<SimpleIntegerProperty> = output.volume
     val channel = Channel<Unit>()
 
     init {
-        CoroutineScope(Dispatchers.Default).launch {
-            processSlices()
-        }
+        processSlices()
     }
 
     private fun processSlices() {
@@ -26,16 +24,17 @@ class ContentCoroutine(output: Output, private val group: Group) {
                     val index = x + dims[0] * (y + dims[1] * z)
                     val color = volume[index]
                     val box = group.children[index] as Box
-                    if (color.get() != 0) {
-                        box.material = PhongMaterial(
-                            Color.rgb(
-                                (color.get() shr 16) and 0xFF,
-                                (color.get() shr 8) and 0xFF,
-                                color.get() and 0xFF
+                    color.addListener { _, _, newValue ->
+                        run {
+                            box.isVisible = newValue != 0
+                            box.material = PhongMaterial(
+                                Color.rgb(
+                                    (color.get() shr 16) and 0xFF,
+                                    (color.get() shr 8) and 0xFF,
+                                    color.get() and 0xFF
+                                )
                             )
-                        )
-                    } else {
-                        box.isVisible = false
+                        };
                     }
                 }
             }

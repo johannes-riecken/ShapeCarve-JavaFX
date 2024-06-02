@@ -1,18 +1,17 @@
 package org.example.shapecarvejavafx
 
 import javafx.beans.property.SimpleIntegerProperty
-import javafx.beans.value.WritableIntegerValue
 
-class ShapeCarver {
+class ShapeCarver(var output: Output) {
     private var depths: MutableList<MutableList<Int>> = mutableListOf()
     private var x: IntArray = IntArray(3) // cursor
-    private var dims: IntArray = intArrayOf(16, 16, 16) // cuboid shape
-    private var volume: MutableList<WritableIntegerValue> = MutableList(dims[0] * dims[1] * dims[2]) { _ -> SimpleIntegerProperty(-1) }
 
     fun carve(
         views: List<List<Int>>,  // 2d images
         maskColor: Int, skip: BooleanArray // views to skip
     ): Output {
+        val volume = output.volume
+        val dims = output.dims
         require(skip.isNotEmpty())
 
         // Initialize depth fields
@@ -148,7 +147,7 @@ class ShapeCarver {
     }
 }
 
-data class Output(val volume: List<WritableIntegerValue>, val dims: IntArray) {
+data class Output(val volume: List<SimpleIntegerProperty>, val dims: IntArray) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
