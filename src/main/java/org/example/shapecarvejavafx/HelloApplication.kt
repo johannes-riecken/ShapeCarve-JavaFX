@@ -195,13 +195,13 @@ class HelloApplication : Application() {
             val button = Button("Next").apply {
                 translateX = 100.0
                 translateY = 100.0
-                setOnAction {
-                    CoroutineScope(Dispatchers.Main).launch {
-                        if (coroutine != null && !coroutine.channel.isEmpty) {
-                            coroutine.channel.receive()
-                        }
-                    }
-                }
+//                setOnAction {
+//                    CoroutineScope(Dispatchers.Main).launch {
+//                        if (coroutine != null && !coroutine.channel.isEmpty) {
+//                            coroutine.channel.receive()
+//                        }
+//                    }
+//                }
             }
             sp.children.add(button)
             scene.widthProperty().bind(sp.widthProperty())
@@ -223,12 +223,12 @@ class HelloApplication : Application() {
                         pos[0] = x
                         val color = volume[x + dims[0] * (y + dims[1] * z)]
                         val box = g.children[x + dims[0] * (y + dims[1] * z)] as Box
-                        if (color != 0) {
+                        if (color.get() != 0) {
                             box.material = PhongMaterial(
                                 Color.rgb(
-                                    (color shr 16) and 0xFF,
-                                    (color shr 8) and 0xFF,
-                                    color and 0xFF
+                                    (color.get() shr 16) and 0xFF,
+                                    (color.get() shr 8) and 0xFF,
+                                    color.get() and 0xFF
                                 )
                             )
                         } else {

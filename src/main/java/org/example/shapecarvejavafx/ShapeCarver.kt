@@ -1,19 +1,19 @@
 package org.example.shapecarvejavafx
 
+import javafx.beans.property.SimpleIntegerProperty
+import javafx.beans.value.WritableIntegerValue
+
 class ShapeCarver {
     private var depths: MutableList<MutableList<Int>> = mutableListOf()
     private var x: IntArray = IntArray(3) // cursor
     private var dims: IntArray = intArrayOf(16, 16, 16) // cuboid shape
-    private var volume: IntArray = IntArray(dims[0] * dims[1] * dims[2])
+    private var volume: MutableList<WritableIntegerValue> = MutableList(dims[0] * dims[1] * dims[2]) { _ -> SimpleIntegerProperty(-1) }
 
     fun carve(
         views: List<List<Int>>,  // 2d images
         maskColor: Int, skip: BooleanArray // views to skip
     ): Output {
         require(skip.isNotEmpty())
-
-        // Initialize volume
-        volume.fill(-1)
 
         // Initialize depth fields
         for (d in 0..2) {
@@ -38,7 +38,7 @@ class ShapeCarver {
                 while (x[u] < dims[u]) {
                     x[d] = depths[2 * d + 1][x[u] + x[v] * dims[u]]
                     while (x[d] <= depths[2 * d][x[u] + x[v] * dims[u]]) {
-                        volume[x[0] + dims[0] * (x[1] + dims[1] * x[2])] = maskColor
+                        volume[x[0] + dims[0] * (x[1] + dims[1] * x[2])].set(maskColor)
                         ++x[d]
                     }
                     ++x[u]
@@ -78,12 +78,12 @@ class ShapeCarver {
                                 // Read volume color
                                 val volIdx = x[0] + dims[0] * (x[1] + dims[1] * x[2])
                                 var color = volume[volIdx]
-                                if (color == maskColor) {
+                                if (color.get() == maskColor) {
                                     x[d] += s
                                     continue
                                 }
 
-                                volume[volIdx] = view[x[u] + dims[u] * x[v]]
+                                volume[volIdx].set(view[x[u] + dims[u] * x[v]])
                                 color = volume[volIdx]
 
                                 // Check photo-consistency of volume at x
@@ -98,7 +98,7 @@ class ShapeCarver {
                                         val fcolor = views[fnum][idx]
                                         val fdepth = depths[fnum][idx]
                                         if (if (t != 0) fdepth <= x[a] else x[a] <= fdepth) {
-                                            if (fcolor != color) {
+                                            if (fcolor != color.get()) {
                                                 consistent = false
                                                 break
                                             }
@@ -110,7 +110,7 @@ class ShapeCarver {
 
                                 // Clear out voxel
                                 ++removed
-                                volume[volIdx] = maskColor
+                                volume[volIdx].set(maskColor)
                                 x[d] += s
                             }
 
@@ -133,8 +133,8 @@ class ShapeCarver {
             while (x[1] < dims[1]) {
                 x[0] = 0
                 while (x[0] < dims[0]) {
-                    if (volume[n] < 0) {
-                        volume[n] = 0xff00ff
+                    if (volume[n].get() < 0) {
+                        volume[n].set(0xff00ff)
                     }
                     ++x[0]
                     ++n
@@ -148,21 +148,21 @@ class ShapeCarver {
     }
 }
 
-data class Output(val volume: IntArray, val dims: IntArray) {
+data class Output(val volume: List<WritableIntegerValue>, val dims: IntArray) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
 
         other as Output
 
-        if (!volume.contentEquals(other.volume)) return false
+        if (volume != other.volume) return false
         if (!dims.contentEquals(other.dims)) return false
 
         return true
     }
 
     override fun hashCode(): Int {
-        var result = volume.contentHashCode()
+        var result = volume.hashCode()
         result = 31 * result + dims.contentHashCode()
         return result
     }

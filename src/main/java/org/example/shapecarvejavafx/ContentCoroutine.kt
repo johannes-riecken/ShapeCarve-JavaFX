@@ -1,5 +1,6 @@
 package org.example.shapecarvejavafx
 
+import javafx.beans.value.WritableIntegerValue
 import javafx.scene.Group
 import javafx.scene.paint.Color
 import javafx.scene.paint.PhongMaterial
@@ -9,7 +10,7 @@ import kotlinx.coroutines.channels.Channel
 
 class ContentCoroutine(output: Output, private val group: Group) {
     private val dims: IntArray = output.dims
-    private val volume: IntArray = output.volume
+    private val volume: List<WritableIntegerValue> = output.volume
     val channel = Channel<Unit>()
 
     init {
@@ -18,30 +19,26 @@ class ContentCoroutine(output: Output, private val group: Group) {
         }
     }
 
-    private suspend fun processSlices() {
+    private fun processSlices() {
         for (z in 0 until dims[2]) {
             for (y in 0 until dims[1]) {
                 for (x in 0 until dims[0]) {
                     val index = x + dims[0] * (y + dims[1] * z)
                     val color = volume[index]
                     val box = group.children[index] as Box
-                    withContext(Dispatchers.Main) {
-                        if (color != 0) {
-                            box.material = PhongMaterial(
-                                Color.rgb(
-                                    (color shr 16) and 0xFF,
-                                    (color shr 8) and 0xFF,
-                                    color and 0xFF
-                                )
+                    if (color.get() != 0) {
+                        box.material = PhongMaterial(
+                            Color.rgb(
+                                (color.get() shr 16) and 0xFF,
+                                (color.get() shr 8) and 0xFF,
+                                color.get() and 0xFF
                             )
-                        } else {
-                            box.isVisible = false
-                        }
+                        )
+                    } else {
+                        box.isVisible = false
                     }
                 }
             }
-            channel.send(Unit)
         }
-        channel.close()
     }
 }
