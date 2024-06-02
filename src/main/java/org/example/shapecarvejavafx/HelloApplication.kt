@@ -69,12 +69,36 @@ class HelloApplication : Application() {
         val output = Output(volume, dims)
         val carver = ShapeCarver(output)
         val views = getViews()
-        val coroutine = ContentCoroutine(output, group)
+        processSlices(dims, volume, group)
         carver.carve(views, 0, booleanArrayOf(false, false, false, false, false, false))
 
-        val rootScene = setUpRootScene(scene, coroutine)
+        val rootScene = setUpRootScene(scene)
         stage.scene = rootScene
         stage.show()
+    }
+
+    private fun processSlices(dims: IntArray, volume: MutableList<SimpleIntegerProperty>, group: Group) {
+        for (z in 0 until dims[2]) {
+            for (y in 0 until dims[1]) {
+                for (x in 0 until dims[0]) {
+                    val index = x + dims[0] * (y + dims[1] * z)
+                    val color = volume[index]
+                    val box = group.children[index] as Box
+                    color.addListener { _, _, newValue ->
+                        run {
+                            box.isVisible = newValue != 0
+                            box.material = PhongMaterial(
+                                Color.rgb(
+                                    (color.get() shr 16) and 0xFF,
+                                    (color.get() shr 8) and 0xFF,
+                                    color.get() and 0xFF
+                                )
+                            )
+                        };
+                    }
+                }
+            }
+        }
     }
 
     private fun groupOfBoxes(dims: IntArray): Group {
@@ -184,7 +208,7 @@ class HelloApplication : Application() {
     }
 
     companion object {
-        private fun setUpRootScene(scene: SubScene, coroutine: ContentCoroutine?): Scene {
+        private fun setUpRootScene(scene: SubScene): Scene {
             val sp = StackPane().apply {
                 prefWidth = 800.0
                 prefHeight = 600.0
