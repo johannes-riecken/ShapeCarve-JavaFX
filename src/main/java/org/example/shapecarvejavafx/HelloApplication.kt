@@ -27,6 +27,8 @@ class HelloApplication : Application() {
     private var mousePosX = 0.0
     private var mousePosY = 0.0
 
+    private lateinit var carver: ShapeCarver
+
     override fun start(stage: Stage) {
         val sceneWidth = 800.0
         val sceneHeight = 600.0
@@ -67,10 +69,8 @@ class HelloApplication : Application() {
         var dims: IntArray = intArrayOf(16, 16, 16) // cuboid shape
         var volume: MutableList<SimpleIntegerProperty> = MutableList(dims[0] * dims[1] * dims[2]) { _ -> SimpleIntegerProperty(-1) }
         val output = Output(volume, dims)
-        val carver = ShapeCarver(output)
-        val views = getViews()
+        carver = ShapeCarver(output)
         processSlices(dims, volume, group)
-        carver.carve(views, 0, booleanArrayOf(false, false, false, false, false, false))
 
         val rootScene = setUpRootScene(scene)
         stage.scene = rootScene
@@ -207,36 +207,43 @@ class HelloApplication : Application() {
         return pixels
     }
 
-    companion object {
-        private fun setUpRootScene(scene: SubScene): Scene {
-            val sp = StackPane().apply {
-                prefWidth = 800.0
-                prefHeight = 600.0
-                maxWidth = StackPane.USE_COMPUTED_SIZE
-                maxHeight = StackPane.USE_COMPUTED_SIZE
-                minWidth = StackPane.USE_COMPUTED_SIZE
-                minHeight = StackPane.USE_COMPUTED_SIZE
-                background = Background.EMPTY
-                children.add(scene)
-                isPickOnBounds = false
-            }
-            val button = Button("Next").apply {
-                translateX = 100.0
-                translateY = 100.0
-//                setOnAction {
-//                    CoroutineScope(Dispatchers.Main).launch {
-//                        if (coroutine != null && !coroutine.channel.isEmpty) {
-//                            coroutine.channel.receive()
-//                        }
-//                    }
-//                }
-            }
-            sp.children.add(button)
-            scene.widthProperty().bind(sp.widthProperty())
-            scene.heightProperty().bind(sp.heightProperty())
-
-            return Scene(sp)
+    private fun setUpRootScene(scene: SubScene): Scene {
+        val sp = StackPane().apply {
+            prefWidth = 800.0
+            prefHeight = 600.0
+            maxWidth = StackPane.USE_COMPUTED_SIZE
+            maxHeight = StackPane.USE_COMPUTED_SIZE
+            minWidth = StackPane.USE_COMPUTED_SIZE
+            minHeight = StackPane.USE_COMPUTED_SIZE
+            background = Background.EMPTY
+            children.add(scene)
+            isPickOnBounds = false
         }
+        val views = getViews()
+        CoroutineScope(Dispatchers.Main).launch {
+            carver.carve(views, 0, booleanArrayOf(false, false, false, false, false, false))
+        }
+        val button = Button("Next").apply {
+            translateX = 100.0
+            translateY = 100.0
+            setOnAction {
+                CoroutineScope(Dispatchers.Main).launch {
+                    if (!carver.channel.isClosedForReceive) {
+                        carver.channel.receive()
+                    } else {
+                        println("Carving complete")
+                    }
+                }
+            }
+        }
+        sp.children.add(button)
+        scene.widthProperty().bind(sp.widthProperty())
+        scene.heightProperty().bind(sp.heightProperty())
+
+        return Scene(sp)
+    }
+
+    companion object {
 
         fun create3DContent(o: Output, g: Group) {
             val volume = o.volume

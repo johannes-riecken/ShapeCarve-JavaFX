@@ -1,15 +1,21 @@
 package org.example.shapecarvejavafx
 
 import javafx.beans.property.SimpleIntegerProperty
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 
 class ShapeCarver(var output: Output) {
     private var depths: MutableList<MutableList<Int>> = mutableListOf()
     private var x: IntArray = IntArray(3) // cursor
 
-    fun carve(
+    public val channel = Channel<Unit>()
+
+    suspend fun carve(
         views: List<List<Int>>,  // 2d images
         maskColor: Int, skip: BooleanArray // views to skip
-    ): Output {
+    ) {
         val volume = output.volume
         val dims = output.dims
         require(skip.isNotEmpty())
@@ -44,6 +50,7 @@ class ShapeCarver(var output: Output) {
                 }
                 ++x[v]
             }
+            channel.send(Unit)
         }
 
         // Perform iterative seam carving until convergence
@@ -121,6 +128,7 @@ class ShapeCarver(var output: Output) {
                     }
                     s += 2
                 }
+                channel.send(Unit)
             }
         }
 
@@ -142,8 +150,7 @@ class ShapeCarver(var output: Output) {
             }
             ++x[2]
         }
-
-        return Output(volume, dims)
+        channel.close()
     }
 }
 
