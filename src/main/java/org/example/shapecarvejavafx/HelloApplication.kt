@@ -17,7 +17,9 @@ import javafx.scene.shape.Box
 import javafx.stage.Stage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
+import org.fxyz3d.utils.CameraTransformer
 
 class HelloApplication : Application() {
     private var mouseDeltaX = 0.0
@@ -32,7 +34,7 @@ class HelloApplication : Application() {
     override fun start(stage: Stage) {
         val sceneWidth = 800.0
         val sceneHeight = 600.0
-        val cameraTransform = Xform()
+        val cameraTransform = CameraTransformer()
 
         val sceneRoot = Group()
         val scene = SubScene(sceneRoot, sceneWidth, sceneHeight, true, SceneAntialiasing.BALANCED).apply {
@@ -66,8 +68,8 @@ class HelloApplication : Application() {
 
         setUpEvents(scene, camera, cameraTransform)
 
-        var dims: IntArray = intArrayOf(16, 16, 16) // cuboid shape
-        var volume: MutableList<SimpleIntegerProperty> = MutableList(dims[0] * dims[1] * dims[2]) { _ -> SimpleIntegerProperty(-1) }
+        val dims: IntArray = intArrayOf(16, 16, 16) // cuboid shape
+        val volume: MutableList<SimpleIntegerProperty> = MutableList(dims[0] * dims[1] * dims[2]) { _ -> SimpleIntegerProperty(-1) }
         val output = Output(volume, dims)
         carver = ShapeCarver(output)
         processSlices(dims, volume, group)
@@ -94,7 +96,7 @@ class HelloApplication : Application() {
                                     color.get() and 0xFF
                                 )
                             )
-                        };
+                        }
                     }
                 }
             }
@@ -125,7 +127,7 @@ class HelloApplication : Application() {
         return g
     }
 
-    private fun setUpEvents(scene: SubScene, camera: PerspectiveCamera, cameraTransform: Xform) {
+    private fun setUpEvents(scene: SubScene, camera: PerspectiveCamera, cameraTransform: CameraTransformer) {
         // First person shooter keyboard movement
         scene.setOnKeyPressed { event: KeyEvent ->
             var change = 10.0
@@ -187,7 +189,6 @@ class HelloApplication : Application() {
     }
 
     private fun getViews(): List<List<Int>> {
-        val views = Array(6) { IntArray(256) }
         val urls = parameters.raw
         return urls.map { url ->
             getView(url).toList()
@@ -207,6 +208,7 @@ class HelloApplication : Application() {
         return pixels
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun setUpRootScene(scene: SubScene): Scene {
         val sp = StackPane().apply {
             prefWidth = 800.0
@@ -241,38 +243,6 @@ class HelloApplication : Application() {
         scene.heightProperty().bind(sp.heightProperty())
 
         return Scene(sp)
-    }
-
-    companion object {
-
-        fun create3DContent(o: Output, g: Group) {
-            val volume = o.volume
-            val dims = o.dims
-            val pos = IntArray(3) // x, y, z
-
-            repeat(dims[2]) { z ->
-                pos[2] = z
-                repeat(dims[1]) { y ->
-                    pos[1] = y
-                    repeat(dims[0]) { x ->
-                        pos[0] = x
-                        val color = volume[x + dims[0] * (y + dims[1] * z)]
-                        val box = g.children[x + dims[0] * (y + dims[1] * z)] as Box
-                        if (color.get() != 0) {
-                            box.material = PhongMaterial(
-                                Color.rgb(
-                                    (color.get() shr 16) and 0xFF,
-                                    (color.get() shr 8) and 0xFF,
-                                    color.get() and 0xFF
-                                )
-                            )
-                        } else {
-                            box.isVisible = false
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 

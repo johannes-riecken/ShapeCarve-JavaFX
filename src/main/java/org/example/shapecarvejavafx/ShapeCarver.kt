@@ -1,16 +1,13 @@
 package org.example.shapecarvejavafx
 
 import javafx.beans.property.SimpleIntegerProperty
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.launch
 
-class ShapeCarver(var output: Output) {
+class ShapeCarver(private var output: Output) {
     private var depths: MutableList<MutableList<Int>> = mutableListOf()
     private var x: IntArray = IntArray(3) // cursor
 
-    public val channel = Channel<Unit>()
+    val channel = Channel<Unit>()
 
     suspend fun carve(
         views: List<List<Int>>,  // 2d images
