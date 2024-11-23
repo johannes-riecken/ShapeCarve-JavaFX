@@ -52,7 +52,7 @@ jobs:
           ACTIONS_ALLOW_UNSECURE_COMMANDS: true
         uses: actions/setup-java@v4
         with:
-          java-version: 22
+          java-version: 23
           distribution: temurin
       # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
       # If this step fails, then you should remove it and run the build manually (see below)
