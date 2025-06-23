@@ -48,7 +48,7 @@
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-swing</artifactId>
-            <version>25-ea+11</version>
+            <version>25-ea+21</version>
         </dependency>
 
         <dependency>
