@@ -50,7 +50,7 @@ jobs:
       - name: Setup Java JDK
         env:
           ACTIONS_ALLOW_UNSECURE_COMMANDS: true
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: 23
           distribution: temurin
