@@ -79,24 +79,24 @@ List.of(0,0,0,0,0,0,0,0)
             var u = (d + 1) % 3; // other axis 0
             var v = (d + 2) % 3; // other axis 1
             for (var s = 0; s <= dims[d] - 1; s += dims[d] - 1) {
-                var vals = new int[dims[u] * dims[v]];
+                var depthsForView = new int[dims[u] * dims[v]];
                 var view = views.get(depths.size());
                 var sOp = (s == 0) ? dims[d] - 1 : 0;
-                for (var i = 0; i < vals.length; ++i) {
+                for (var i = 0; i < depthsForView.length; ++i) {
                     var shouldSkip = skip[depths.size()];
                     var pixel = view.get(i);
-                    vals[i] = (!shouldSkip && pixel == maskColor) ? sOp : s;
+                    depthsForView[i] = (!shouldSkip && pixel == maskColor) ? sOp : s;
                 }
-                // add vals as a mutable ArrayList to depth
+                // add depthsForView as a mutable ArrayList to depth
                 var valsList = new ArrayList<Integer>();
-                for (var val : vals) {
+                for (var val : depthsForView) {
                     valsList.add(val);
                 }
                 depths.add(valsList);
 
             }
 
-            //Clear out volume
+            //Clear out volume where ray goes through entirely
             for (cursor[v] = 0; cursor[v] < dims[v]; ++cursor[v]) {
                 for (cursor[u] = 0; cursor[u] < dims[u]; ++cursor[u]) {
                     for (cursor[d] = depths.get(2 * d + 1).get(cursor[u] + dims[u] * cursor[v]); cursor[d] <= depths.get(2 * d).get(cursor[u] + dims[u] * cursor[v]); ++cursor[d]) {
@@ -106,7 +106,7 @@ List.of(0,0,0,0,0,0,0,0)
             }
         }
 
-        //Perform iterative seam carving until convergence
+        //Perform iterative shape carving until convergence
         var removed = 1;
         while (removed > 0) {
             removed = 0;
