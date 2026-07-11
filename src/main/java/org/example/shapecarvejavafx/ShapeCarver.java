@@ -99,7 +99,7 @@ List.of(0,0,0,0,0,0,0,0)
             //Clear out volume
             for (cursor[v] = 0; cursor[v] < dims[v]; ++cursor[v]) {
                 for (cursor[u] = 0; cursor[u] < dims[u]; ++cursor[u]) {
-                    for (cursor[d] = depths.get(2 * d + 1).get(cursor[u] + cursor[v] * dims[u]); cursor[d] <= depths.get(2 * d).get(cursor[u] + cursor[v] * dims[u]); ++cursor[d]) {
+                    for (cursor[d] = depths.get(2 * d + 1).get(cursor[u] + dims[u] * cursor[v]); cursor[d] <= depths.get(2 * d).get(cursor[u] + dims[u] * cursor[v]); ++cursor[d]) {
                         volume[cursor[0] + dims[0] * (cursor[1] + dims[1] * cursor[2])] = maskColor;
                     }
                 }
