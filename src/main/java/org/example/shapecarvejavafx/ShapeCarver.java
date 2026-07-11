@@ -1,16 +1,73 @@
 package org.example.shapecarvejavafx;
 
-import org.jetbrains.annotations.*;
-
 import java.util.*;
 
 public class ShapeCarver {
+    public static void main(String[] args) {
+        ShapeCarver c = new ShapeCarver();
+        var res = c.carve(List.of(
+List.of(0,0,0,0,0,1,2,0,0,3,4,0,0,0,0,0),
+List.of(0,0,0,0,0,5,6,0,0,7,8,0,0,0,0,0),
+List.of(0,0,0,0,0,0,0,0),
+List.of(0,0,0,0,0,0,0,0),
+List.of(0,0,0,0,0,0,0,0),
+List.of(0,0,0,0,0,0,0,0)
+                    ), 0, new boolean[]{
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+        });
+        System.out.println(res);
+    }
+
+    public final class Output {
+        private final List<Integer> volume;
+        private final List<Integer> dims;
+
+        Output(int[] volume, int[] dims) {
+            this.volume = Arrays.stream(volume).boxed().toList();
+            this.dims = Arrays.stream(dims).boxed().toList();
+        }
+
+        public List<Integer> volume() {
+            return volume;
+        }
+
+        public List<Integer> dims() {
+            return dims;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == this) return true;
+            if (obj == null || obj.getClass() != this.getClass()) return false;
+            var that = (Output) obj;
+            return this.volume.equals(that.volume) &&
+                    this.dims.equals(that.dims);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(volume.hashCode(), dims.hashCode());
+        }
+
+        @Override
+        public String toString() {
+            return "output[" +
+                    "volume=" + volume.toString() + ", " +
+                    "dims=" + dims.toString() + ']';
+        }
+    }
     List<List<Integer>> depths = new ArrayList<>();
     int[] x = new int[3]; // cursor
-    int[] dims = new int[]{16, 16, 16}; /* cuboid shape */
+    int[] dims = new int[]{2, 4, 4}; /* cuboid shape */
     int[] volume = new int[dims[0] * dims[1] * dims[2]];
 
-    public Output carve(List<List<Integer>> views /* 2d images */, final int maskColor, boolean[] skip /* views to skip */) {
+    // note that JavaFX uses a y-down coordinate system, so the views are left, right, top, bottom, front, back
+    public Output carve(List<List<Integer>> views /* 2d images {x,y,z}-{front,back} */, final int maskColor, boolean[] skip /* views to skip, must have length 6 */) {
         Objects.requireNonNull(views);
         Objects.requireNonNull(skip);
 
@@ -26,7 +83,9 @@ public class ShapeCarver {
                 var view = views.get(depths.size());
                 var sOp = (s == 0) ? dims[d] - 1 : 0;
                 for (var i = 0; i < vals.length; ++i) {
-                    vals[i] = (!skip[depths.size()] && view.get(i) == maskColor) ? sOp : s;
+                    var shouldSkip = skip[depths.size()];
+                    var pixel = view.get(i);
+                    vals[i] = (!shouldSkip && pixel == maskColor) ? sOp : s;
                 }
                 // add vals as a mutable ArrayList to depth
                 var valsList = new ArrayList<Integer>();
@@ -117,17 +176,6 @@ public class ShapeCarver {
                 }
             }
         }
-
-        //Do a final pass to fill in any missing colors
-        var n = 0; // linear index. See loop invariant below
-        for (x[2] = 0; x[2] < dims[2]; ++x[2])
-            for (x[1] = 0; x[1] < dims[1]; ++x[1])
-                for (x[0] = 0; x[0] < dims[0]; ++x[0], ++n) {
-                    assert n == x[0] + dims[0] * (x[1] + dims[1] * x[2]);
-                    if (volume[n] < 0) {
-                        volume[n] = 0xff00ff;
-                    }
-                }
 
         return new Output(volume, dims);
 
