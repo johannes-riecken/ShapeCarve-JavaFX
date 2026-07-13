@@ -62,7 +62,7 @@ List.of(0,0,0,0,0,0,0,0)
         }
     }
     List<List<Integer>> depths = new ArrayList<>();
-    int[] x = new int[3]; // cursor
+    int[] cursor = new int[3]; // (z, y, x)
     int[] dims = new int[]{2, 4, 4}; /* cuboid shape */
     int[] volume = new int[dims[0] * dims[1] * dims[2]];
 
@@ -97,10 +97,10 @@ List.of(0,0,0,0,0,0,0,0)
             }
 
             //Clear out volume
-            for (x[v] = 0; x[v] < dims[v]; ++x[v]) {
-                for (x[u] = 0; x[u] < dims[u]; ++x[u]) {
-                    for (x[d] = depths.get(2 * d + 1).get(x[u] + x[v] * dims[u]); x[d] <= depths.get(2 * d).get(x[u] + x[v] * dims[u]); ++x[d]) {
-                        volume[x[0] + dims[0] * (x[1] + dims[1] * x[2])] = maskColor;
+            for (cursor[v] = 0; cursor[v] < dims[v]; ++cursor[v]) {
+                for (cursor[u] = 0; cursor[u] < dims[u]; ++cursor[u]) {
+                    for (cursor[d] = depths.get(2 * d + 1).get(cursor[u] + cursor[v] * dims[u]); cursor[d] <= depths.get(2 * d).get(cursor[u] + cursor[v] * dims[u]); ++cursor[d]) {
+                        volume[cursor[0] + dims[0] * (cursor[1] + dims[1] * cursor[2])] = maskColor;
                     }
                 }
             }
@@ -124,28 +124,28 @@ List.of(0,0,0,0,0,0,0,0)
                     var view = views.get(vNum);
                     var depth = depths.get(vNum);
 
-                    for (x[v] = 0; x[v] < dims[v]; ++x[v])
-                        for (x[u] = 0; x[u] < dims[u]; ++x[u]) {
+                    for (cursor[v] = 0; cursor[v] < dims[v]; ++cursor[v])
+                        for (cursor[u] = 0; cursor[u] < dims[u]; ++cursor[u]) {
 
                             //March along ray
-                            var bufIdx = x[u] + x[v] * dims[u];
-                            for (x[d] = depth.get(bufIdx); 0 <= x[d] && x[d] < dims[d]; x[d] += s) {
+                            var bufIdx = cursor[u] + cursor[v] * dims[u];
+                            for (cursor[d] = depth.get(bufIdx); 0 <= cursor[d] && cursor[d] < dims[d]; cursor[d] += s) {
 
                                 //Read volume color
-                                var volIdx = x[0] + dims[0] * (x[1] + dims[1] * x[2]);
+                                var volIdx = cursor[0] + dims[0] * (cursor[1] + dims[1] * cursor[2]);
                                 var color = volume[volIdx];
                                 if (color == maskColor) {
                                     continue;
                                 }
 
-                                color = volume[volIdx] = view.get(x[u] + dims[u] * x[v]);
+                                color = volume[volIdx] = view.get(cursor[u] + dims[u] * cursor[v]);
 
-                                //Check photo-consistency of volume at x
+                                //Check photo-consistency of volume at cursor
                                 var consistent = true;
                                 for (var a = 0; consistent && a < 3; ++a) {
                                     var b = (a + 1) % 3;
                                     var c = (a + 2) % 3;
-                                    var idx = x[b] + dims[b] * x[c];
+                                    var idx = cursor[b] + dims[b] * cursor[c];
                                     for (var t = 0; t < 2; ++t) {
                                         var fnum = 2 * a + t;
                                         if (skip[fnum]) {
@@ -153,7 +153,7 @@ List.of(0,0,0,0,0,0,0,0)
                                         }
                                         var fcolor = views.get(fnum).get(idx);
                                         var fdepth = depths.get(fnum).get(idx);
-                                        if (t != 0 ? fdepth <= x[a] : x[a] <= fdepth) {
+                                        if (t != 0 ? fdepth <= cursor[a] : cursor[a] <= fdepth) {
                                             if (fcolor != color) {
                                                 consistent = false;
                                                 break;
@@ -171,7 +171,7 @@ List.of(0,0,0,0,0,0,0,0)
                             }
 
                             //Update depth value
-                            depth.set(bufIdx, x[d]);
+                            depth.set(bufIdx, cursor[d]);
                         }
                 }
             }
