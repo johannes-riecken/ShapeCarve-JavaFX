@@ -33,10 +33,64 @@ public class ShapeCarver {
                 false,
                 false
         });
-        System.out.println(res);
+        var printWriter = new PrintWriter("volume.txt");
+        printWriter.println(res.volume.toString().replace(" ", ""));
+        printWriter.close();
+
+        try {
+                // Define the processes to run in the pipeline
+                List<ProcessBuilder> builders = Arrays.asList(
+                    new ProcessBuilder("jq", "-c", ".[0].want|flatten", "test_cases.json"),
+                    new ProcessBuilder("git", "diff", "volume.txt", "/dev/stdin")
+                );
+
+                // startPipeline hooks the output of 'jq' to the input of 'git' at the OS level
+                List<Process> processes = ProcessBuilder.startPipeline(builders);
+
+                Process jqProcess = processes.get(0);
+                Process gitProcess = processes.get(1);
+
+                // Read the output of the final process (git diff) and write it to our stdout
+                try (InputStream stdout = gitProcess.getInputStream();
+                     InputStream stderr = gitProcess.getErrorStream()) {
+
+                    // We transfer the bytes of the diff directly to System.out
+                    stdout.transferTo(System.out);
+                    // In case of execution issues, transfer error streams to System.err
+                    stderr.transferTo(System.err);
+
+                    // Also print errors from jq if any occurred
+                    try (InputStream jqStderr = jqProcess.getErrorStream()) {
+                        jqStderr.transferTo(System.err);
+                    }
+                }
+
+                // Wait for both processes to complete
+                int jqExitCode = jqProcess.waitFor();
+                int gitExitCode = gitProcess.waitFor();
+
+                // If jq failed, we should probably print its issue and exit
+                if (jqExitCode != 0) {
+                    System.err.printf("jq process failed with exit code: %d%n", jqExitCode);
+                    System.exit(jqExitCode);
+                }
+
+                // Equivalent to checking $? != 0 in Perl
+                if (gitExitCode != 0) {
+                    System.exit(1);
+                }
+
+            } catch (IOException e) {
+                System.err.println("Pipeline execution error (missing binary or invalid file): " + e.getMessage());
+                System.exit(1);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                System.err.println("Execution was interrupted.");
+                System.exit(1);
+            }
     }
 
-    public final class Output {
+    public static final class Output {
         private final List<Integer> volume;
         private final List<Integer> dims;
 
