@@ -1,24 +1,37 @@
 package org.example.shapecarvejavafx;
 
+import java.io.*;
 import java.util.*;
 
 public class ShapeCarver {
-    public static void main(String[] args) {
-        ShapeCarver c = new ShapeCarver();
-        var res = c.carve(List.of(
-List.of(0,0,0,0,0,1,2,0,0,3,4,0,0,0,0,0),
-List.of(0,0,0,0,0,5,6,0,0,7,8,0,0,0,0,0),
-List.of(0,0,0,0,0,0,0,0),
-List.of(0,0,0,0,0,0,0,0),
-List.of(0,0,0,0,0,0,0,0),
-List.of(0,0,0,0,0,0,0,0)
-                    ), 0, new boolean[]{
-            false,
-            false,
-            false,
-            false,
-            false,
-            false
+    public static void main(String[] args) throws ClassNotFoundException, IOException {
+        var c = new ShapeCarver();
+        var s = new ObjectInputStream(new FileInputStream("roundtrip.ser"));
+        var views = (int[][][])s.readObject();
+        var viewsAsList = new ArrayList<List<Integer>>();
+        for (int[][] view : views) {
+            var viewAsList = new ArrayList<Integer>();
+            for (int[] row : view) {
+                for (int color : row) {
+                    viewAsList.add(color);
+                }
+            }
+            viewsAsList.add(viewAsList);
+        }
+        // assuming views:
+        // 0 (z, y)
+        // 1 (x, z)
+        // 2 (y, x)
+        c.dims = new int[]{views[2].length, views[0][0].length, views[0].length};
+        c.volume = new int[c.dims[0] * c.dims[1] * c.dims[2]];
+
+        var res = c.carve(viewsAsList, 0, new boolean[]{
+                false,
+                false,
+                false,
+                false,
+                false,
+                false
         });
         System.out.println(res);
     }
@@ -61,6 +74,7 @@ List.of(0,0,0,0,0,0,0,0)
                     "dims=" + dims.toString() + ']';
         }
     }
+
     List<List<Integer>> depths = new ArrayList<>();
     int[] cursor = new int[3]; // (z, y, x)
     int[] dims = new int[]{2, 4, 4}; /* cuboid shape */
