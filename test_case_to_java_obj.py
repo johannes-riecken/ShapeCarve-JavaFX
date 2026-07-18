@@ -2,11 +2,42 @@
 import javaobj.v3 as javaobj
 import json
 import numpy as np
+import sys
+
+if len(sys.argv) != 2:
+    print('Usage: test_case_to_java_obj <test_case_index>', sys.stderr)
+    exit(1)
 
 f = open('test_cases.json')
 jj = json.load(f)
 
-a = np.array(jj[0]['views'])
+test_case_index = int(sys.argv[1])
+
+a = np.array(jj[test_case_index]['views'])
+
+# transform to legacy conventions
+# keep the front-back ordering intact
+a = a.reshape(3, 2, a.shape[1], a.shape[2])
+a = np.flip(a, axis=0)
+a = a.reshape(6, a.shape[2], a.shape[3])
+print(a)
+a[2] = a[2].transpose()
+a[3] = a[3].transpose()
+# # got (modern):
+# (y, x)
+# (z, x)
+# (z, y)
+
+# # want (legacy):
+# (y,z)
+# (z,x)
+# (x,y)
+
+# # what I see is just transposed (mario.png):
+# (z,y)
+# (x,z)
+# (y,x)
+
 
 # created with ArraySerializer.java
 f = open('3dArray.ser', 'rb')
@@ -56,4 +87,3 @@ for i in range(a.shape[0]):
 
 with open('roundtrip.ser', 'wb') as f_out:
     javaobj.dump(f_out, root_3d_array)
-

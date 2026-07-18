@@ -4,8 +4,26 @@ import java.io.*;
 import java.util.*;
 
 public class ShapeCarver {
-    public static void main(String[] args) throws ClassNotFoundException, IOException {
+    public static void main(String[] args) throws ClassNotFoundException, InterruptedException, IOException {
+        if (args.length != 1) {
+            System.err.println("Usage: ShapeCarver <test_case_index>");
+            System.exit(1);
+        }
+        var testCaseIndex = Integer.parseInt(args[0]);
         var c = new ShapeCarver();
+        var process = new ProcessBuilder("python3", "test_case_to_java_obj.py", args[0]).start();
+        try (InputStream stdout = process.getInputStream();
+             InputStream stderr = process.getErrorStream()) {
+
+            // We transfer the bytes of the diff directly to System.out
+            stdout.transferTo(System.out);
+            // In case of execution issues, transfer error streams to System.err
+            stderr.transferTo(System.err);
+        }
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            System.exit(exitCode);
+        }
         var s = new ObjectInputStream(new FileInputStream("roundtrip.ser"));
         var views = (int[][][])s.readObject();
         var viewsAsList = new ArrayList<List<Integer>>();
@@ -25,7 +43,8 @@ public class ShapeCarver {
         c.dims = new int[]{views[2].length, views[0][0].length, views[0].length};
         c.volume = new int[c.dims[0] * c.dims[1] * c.dims[2]];
 
-        var res = c.carve(viewsAsList, 0, new boolean[]{
+        var maskColor = 0;
+        var res = c.carve(viewsAsList, maskColor, new boolean[]{
                 false,
                 false,
                 false,
@@ -40,7 +59,7 @@ public class ShapeCarver {
         try {
                 // Define the processes to run in the pipeline
                 List<ProcessBuilder> builders = Arrays.asList(
-                    new ProcessBuilder("jq", "-c", ".[0].want|flatten", "test_cases.json"),
+                    new ProcessBuilder("jq", "-c", ".[" + testCaseIndex + "].want|flatten", "test_cases.json"),
                     new ProcessBuilder("git", "diff", "volume.txt", "/dev/stdin")
                 );
 
@@ -131,8 +150,8 @@ public class ShapeCarver {
 
     List<List<Integer>> depths = new ArrayList<>();
     int[] cursor = new int[3]; // (z, y, x)
-    int[] dims = new int[]{2, 4, 4}; /* cuboid shape */
-    int[] volume = new int[dims[0] * dims[1] * dims[2]];
+    int[] dims; /* cuboid shape */
+    int[] volume;
 
     // note that JavaFX uses a y-down coordinate system, so the views are left, right, top, bottom, front, back
     public Output carve(List<List<Integer>> views /* 2d images {x,y,z}-{front,back} */, final int maskColor, boolean[] skip /* views to skip, must have length 6 */) {
@@ -244,6 +263,17 @@ public class ShapeCarver {
                 }
             }
         }
+
+        //Do a final pass to fill in any missing colors
+        var n = 0; // linear index. See loop invariant below
+        for (cursor[2] = 0; cursor[2] < dims[2]; ++cursor[2])
+            for (cursor[1] = 0; cursor[1] < dims[1]; ++cursor[1])
+                for (cursor[0] = 0; cursor[0] < dims[0]; ++cursor[0], ++n) {
+                    assert n == cursor[0] + dims[0] * (cursor[1] + dims[1] * cursor[2]);
+                    if (volume[n] < 0) {
+                        volume[n] = 0xff00ff;
+                    }
+                }
 
         return new Output(volume, dims);
 
