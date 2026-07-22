@@ -58,7 +58,7 @@ for i in range(6):
     view = to_view(i)
     three_channel_view = view.view(np.uint8).reshape(*dims_map.values(), 4)[:, :, 1:4]
     views.append(view.tolist())
-    img = Image.fromarray(view, 'RGB')
+    img = Image.fromarray(three_channel_view, 'RGB')
     img.save(f'img{i}.png')
 
 print(views)

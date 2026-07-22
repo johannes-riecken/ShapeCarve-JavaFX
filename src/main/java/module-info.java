@@ -1,10 +1,12 @@
 module org.example.shapecarvejavafx {
-    requires javafx.controls;
-    requires javafx.fxml;
-    requires org.fxyz3d.core;
-    requires org.jetbrains.annotations;
+    // requires javafx.controls;
+    // requires javafx.fxml;
+    // requires org.fxyz3d.core;
+    // requires org.jetbrains.annotations;
 
 
-    opens org.example.shapecarvejavafx to javafx.fxml;
+    // opens org.example.shapecarvejavafx to javafx.fxml;
     exports org.example.shapecarvejavafx;
+    requires org.openjdk.engine.python;
+    requires java.scripting;
 }

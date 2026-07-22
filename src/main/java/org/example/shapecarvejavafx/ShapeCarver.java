@@ -2,13 +2,23 @@ package org.example.shapecarvejavafx;
 
 import java.io.*;
 import java.util.*;
+import javax.script.*;
+import org.openjdk.engine.python.*;
+import org.openjdk.engine.python.AbstractPythonScriptEngine;
+import org.openjdk.engine.python.AbstractPythonScriptEngine.PyExecMode;
 
 public class ShapeCarver {
-    public static void main(String[] args) throws ClassNotFoundException, InterruptedException, IOException {
+    public static void main(String[] args) throws Exception {
         if (args.length != 1) {
             System.err.println("Usage: ShapeCarver <test_case_index>");
             System.exit(1);
         }
+
+        var m = new ScriptEngineManager();
+        var e = (PythonScriptEngine) m.getEngineByName("python");
+        e.setExecMode(PyExecMode.SINGLE);
+        e.eval("import numpy as np");
+
         var testCaseIndex = Integer.parseInt(args[0]);
         var c = new ShapeCarver();
         var process = new ProcessBuilder("python3", "test_case_to_java_obj.py", args[0]).start();
@@ -53,21 +63,23 @@ public class ShapeCarver {
                 false
         });
         var printWriter = new PrintWriter("volume.txt");
-        printWriter.println(res.volume.toString().replace(" ", ""));
+        printWriter.println(res.toZyxString());
         printWriter.close();
 
         try {
                 // Define the processes to run in the pipeline
                 List<ProcessBuilder> builders = Arrays.asList(
-                    new ProcessBuilder("jq", "-c", ".[" + testCaseIndex + "].want|flatten", "test_cases.json"),
-                    new ProcessBuilder("git", "diff", "volume.txt", "/dev/stdin")
+                    new ProcessBuilder("jq", "-c", ".[" + testCaseIndex + "].want", "test_cases.json")
+                    , new ProcessBuilder("gsed", "s/-1\\>/16711935/g")
+                    , new ProcessBuilder("git", "diff", "volume.txt", "/dev/stdin")
                 );
 
                 // startPipeline hooks the output of 'jq' to the input of 'git' at the OS level
                 List<Process> processes = ProcessBuilder.startPipeline(builders);
 
                 Process jqProcess = processes.get(0);
-                Process gitProcess = processes.get(1);
+                Process gsedProcess = processes.get(1);
+                Process gitProcess = processes.get(2);
 
                 // Read the output of the final process (git diff) and write it to our stdout
                 try (InputStream stdout = gitProcess.getInputStream();
@@ -82,27 +94,34 @@ public class ShapeCarver {
                     try (InputStream jqStderr = jqProcess.getErrorStream()) {
                         jqStderr.transferTo(System.err);
                     }
+
+                    try (InputStream gsedStderr = gsedProcess.getErrorStream()) {
+                        gsedStderr.transferTo(System.err);
+                    }
                 }
 
-                // Wait for both processes to complete
                 int jqExitCode = jqProcess.waitFor();
+                int gsedExitCode = gsedProcess.waitFor();
                 int gitExitCode = gitProcess.waitFor();
 
-                // If jq failed, we should probably print its issue and exit
                 if (jqExitCode != 0) {
                     System.err.printf("jq process failed with exit code: %d%n", jqExitCode);
                     System.exit(jqExitCode);
                 }
 
-                // Equivalent to checking $? != 0 in Perl
+                if (gsedExitCode != 0) {
+                    System.err.printf("gsed process failed with exit code: %d%n", gsedExitCode);
+                    System.exit(gsedExitCode);
+                }
+
                 if (gitExitCode != 0) {
                     System.exit(1);
                 }
 
-            } catch (IOException e) {
-                System.err.println("Pipeline execution error (missing binary or invalid file): " + e.getMessage());
+            } catch (IOException ex) {
+                System.err.println("Pipeline execution error (missing binary or invalid file): " + ex.getMessage());
                 System.exit(1);
-            } catch (InterruptedException e) {
+            } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
                 System.err.println("Execution was interrupted.");
                 System.exit(1);
@@ -142,10 +161,53 @@ public class ShapeCarver {
 
         @Override
         public String toString() {
-            return "output[" +
-                    "volume=" + volume.toString() + ", " +
-                    "dims=" + dims.toString() + ']';
+            var res = new StringBuilder();
+            res.append("[");
+            for (var z = 0; z < this.dims.get(2); z++) {
+                res.append("[");
+                for (var y = 0; y < this.dims.get(1); y++) {
+                    res.append("[");
+                    for (var x = 0; x < this.dims.get(0); x++) {
+                        res.append(this.volume.get(x + dims.get(0) * y + dims.get(0) * dims.get(1) * z));
+                        // res.append(this.volume.get(z + dims.get(2) * y + dims.get(2) * dims.get(1) * x));
+                        // if (z < this.dims.get(2) -1 || y < this.dims.get(1) - 1 || x < this.dims.get(0) - 1) {
+                        if (x < this.dims.get(0) - 1) {
+                            res.append(",");
+                        }
+                    }
+                    res.append("]");
+                    if (y < this.dims.get(1) - 1) {
+                        res.append(",");
+                    }
+                }
+                res.append("]");
+                if (z < this.dims.get(2) - 1) {
+                    res.append(",");
+                }
+            }
+            res.append("]");
+            return res.toString();
         }
+
+        public String toZyxString() {
+            var res = this.toString();
+            return res.replace(" ", "");
+            // return res.replace(" ", "").replace("16711935", "-1");
+            // var res = new StringBuilder("[");
+            // for (var z = 0; z < this.dims.get(2); z++) {
+            //     for (var y = 0; y < this.dims.get(1); y++) {
+            //         for (var x = 0; x < this.dims.get(0); x++) {
+            //             res.append(this.volume.get(z + dims.get(2) * y + dims.get(2) * dims.get(1) * x));
+            //             if (z < this.dims.get(2) -1 || y < this.dims.get(1) - 1 || x < this.dims.get(0) - 1) {
+            //                 res.append(",");
+            //             }
+            //         }
+            //     }
+            // }
+            // res.append("]");
+            // return res.toString();
+        }
+
     }
 
     List<List<Integer>> depths = new ArrayList<>();

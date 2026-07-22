@@ -20,7 +20,6 @@ a = np.array(jj[test_case_index]['views'])
 a = a.reshape(3, 2, a.shape[1], a.shape[2])
 a = np.flip(a, axis=0)
 a = a.reshape(6, a.shape[2], a.shape[3])
-print(a)
 a[2] = a[2].transpose()
 a[3] = a[3].transpose()
 # # got (modern):
