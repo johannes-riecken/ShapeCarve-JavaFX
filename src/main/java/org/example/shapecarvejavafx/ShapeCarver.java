@@ -8,6 +8,10 @@ import org.openjdk.engine.python.AbstractPythonScriptEngine;
 import org.openjdk.engine.python.AbstractPythonScriptEngine.PyExecMode;
 
 public class ShapeCarver {
+        public static String toZyxString(Object o) {
+            var res = o.toString();
+            return res.replace(" ", "");
+        }
     public static void main(String[] args) throws Exception {
         if (args.length != 1) {
             System.err.println("Usage: ShapeCarver <test_case_index>");
@@ -18,10 +22,11 @@ public class ShapeCarver {
         var e = (PythonScriptEngine) m.getEngineByName("python");
         e.setExecMode(PyExecMode.SINGLE);
         e.eval("import numpy as np");
+        e.setExecMode(PyExecMode.EVAL);
 
         var testCaseIndex = Integer.parseInt(args[0]);
         var c = new ShapeCarver();
-        var process = new ProcessBuilder("python3", "test_case_to_java_obj.py", args[0]).start();
+        var process = new ProcessBuilder("./venv/bin/python3", "test_case_to_java_obj.py", args[0]).start();
         try (InputStream stdout = process.getInputStream();
              InputStream stderr = process.getErrorStream()) {
 
@@ -54,16 +59,16 @@ public class ShapeCarver {
         c.volume = new int[c.dims[0] * c.dims[1] * c.dims[2]];
 
         var maskColor = 0;
-        var res = c.carve(viewsAsList, maskColor, new boolean[]{
+        e.put("res", c.carve(e, viewsAsList, maskColor, new boolean[]{
                 false,
                 false,
                 false,
                 false,
                 false,
                 false
-        });
+        }));
         var printWriter = new PrintWriter("volume.txt");
-        printWriter.println(res.toZyxString());
+        printWriter.println(toZyxString(e.eval("res.tolist()")));
         printWriter.close();
 
         try {
@@ -189,24 +194,6 @@ public class ShapeCarver {
             return res.toString();
         }
 
-        public String toZyxString() {
-            var res = this.toString();
-            return res.replace(" ", "");
-            // return res.replace(" ", "").replace("16711935", "-1");
-            // var res = new StringBuilder("[");
-            // for (var z = 0; z < this.dims.get(2); z++) {
-            //     for (var y = 0; y < this.dims.get(1); y++) {
-            //         for (var x = 0; x < this.dims.get(0); x++) {
-            //             res.append(this.volume.get(z + dims.get(2) * y + dims.get(2) * dims.get(1) * x));
-            //             if (z < this.dims.get(2) -1 || y < this.dims.get(1) - 1 || x < this.dims.get(0) - 1) {
-            //                 res.append(",");
-            //             }
-            //         }
-            //     }
-            // }
-            // res.append("]");
-            // return res.toString();
-        }
 
     }
 
@@ -216,7 +203,7 @@ public class ShapeCarver {
     int[] volume;
 
     // note that JavaFX uses a y-down coordinate system, so the views are left, right, top, bottom, front, back
-    public Output carve(List<List<Integer>> views /* 2d images {x,y,z}-{front,back} */, final int maskColor, boolean[] skip /* views to skip, must have length 6 */) {
+    public PyObject carve(PythonScriptEngine e, List<List<Integer>> views /* 2d images {x,y,z}-{front,back} */, final int maskColor, boolean[] skip /* views to skip, must have length 6 */) throws ScriptException, NoSuchMethodException {
         Objects.requireNonNull(views);
         Objects.requireNonNull(skip);
 
@@ -337,8 +324,25 @@ public class ShapeCarver {
                     }
                 }
 
-        return new Output(volume, dims);
+        PyObject[] pyObjArr3D = new PyObject[dims[0]];
+        for (var i = 0; i < dims[0]; i++) {
+            var pyObjArr2D = new PyObject[dims[1]];
+            for (var j = 0; j < dims[1]; j++) {
+                var pyObjArr1D = new PyObject[dims[0]];
+                for (var k = 0; k < dims[2]; k++) {
+                    pyObjArr1D[k] = (PyObject) e.invokeFunction("int", volume[k + dims[0] * (j + dims[1] * i)]);
+                }
+                var pyList1D = e.newPyList(pyObjArr1D);
+                pyObjArr2D[j] = pyList1D;
+            }
+            var pyList2D = e.newPyList(pyObjArr2D);
+            pyObjArr3D[i] = pyList2D;
+        }
+        var pyList3D = e.newPyList(pyObjArr3D);
+        e.put("xs", pyList3D);
 
+        var numpyList3D = (PyObject) e.eval("np.array(xs)");
+        return numpyList3D;
     }
 }
 
