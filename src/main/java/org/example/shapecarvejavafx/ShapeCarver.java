@@ -3,15 +3,17 @@ package org.example.shapecarvejavafx;
 import java.io.*;
 import java.util.*;
 import javax.script.*;
+
 import org.openjdk.engine.python.*;
 import org.openjdk.engine.python.AbstractPythonScriptEngine;
 import org.openjdk.engine.python.AbstractPythonScriptEngine.PyExecMode;
 
 public class ShapeCarver {
-        public static String toZyxString(Object o) {
-            var res = o.toString();
-            return res.replace(" ", "");
-        }
+    public static String toZyxString(Object o) {
+        var res = o.toString();
+        return res.replace(" ", "");
+    }
+
     public static void main(String[] args) throws Exception {
         if (args.length != 1) {
             System.err.println("Usage: ShapeCarver <test_case_index>");
@@ -40,7 +42,7 @@ public class ShapeCarver {
             System.exit(exitCode);
         }
         var s = new ObjectInputStream(new FileInputStream("roundtrip.ser"));
-        var views = (int[][][])s.readObject();
+        var views = (int[][][]) s.readObject();
         var viewsAsList = new ArrayList<List<Integer>>();
         for (int[][] view : views) {
             var viewAsList = new ArrayList<Integer>();
@@ -72,129 +74,65 @@ public class ShapeCarver {
         printWriter.close();
 
         try {
-                // Define the processes to run in the pipeline
-                List<ProcessBuilder> builders = Arrays.asList(
+            // Define the processes to run in the pipeline
+            List<ProcessBuilder> builders = Arrays.asList(
                     new ProcessBuilder("jq", "-c", ".[" + testCaseIndex + "].want", "test_cases.json")
                     , new ProcessBuilder("gsed", "s/-1\\>/16711935/g")
                     , new ProcessBuilder("git", "diff", "volume.txt", "/dev/stdin")
-                );
+            );
 
-                // startPipeline hooks the output of 'jq' to the input of 'git' at the OS level
-                List<Process> processes = ProcessBuilder.startPipeline(builders);
+            // startPipeline hooks the output of 'jq' to the input of 'git' at the OS level
+            List<Process> processes = ProcessBuilder.startPipeline(builders);
 
-                Process jqProcess = processes.get(0);
-                Process gsedProcess = processes.get(1);
-                Process gitProcess = processes.get(2);
+            Process jqProcess = processes.get(0);
+            Process gsedProcess = processes.get(1);
+            Process gitProcess = processes.get(2);
 
-                // Read the output of the final process (git diff) and write it to our stdout
-                try (InputStream stdout = gitProcess.getInputStream();
-                     InputStream stderr = gitProcess.getErrorStream()) {
+            // Read the output of the final process (git diff) and write it to our stdout
+            try (InputStream stdout = gitProcess.getInputStream();
+                 InputStream stderr = gitProcess.getErrorStream()) {
 
-                    // We transfer the bytes of the diff directly to System.out
-                    stdout.transferTo(System.out);
-                    // In case of execution issues, transfer error streams to System.err
-                    stderr.transferTo(System.err);
+                // We transfer the bytes of the diff directly to System.out
+                stdout.transferTo(System.out);
+                // In case of execution issues, transfer error streams to System.err
+                stderr.transferTo(System.err);
 
-                    // Also print errors from jq if any occurred
-                    try (InputStream jqStderr = jqProcess.getErrorStream()) {
-                        jqStderr.transferTo(System.err);
-                    }
-
-                    try (InputStream gsedStderr = gsedProcess.getErrorStream()) {
-                        gsedStderr.transferTo(System.err);
-                    }
+                // Also print errors from jq if any occurred
+                try (InputStream jqStderr = jqProcess.getErrorStream()) {
+                    jqStderr.transferTo(System.err);
                 }
 
-                int jqExitCode = jqProcess.waitFor();
-                int gsedExitCode = gsedProcess.waitFor();
-                int gitExitCode = gitProcess.waitFor();
-
-                if (jqExitCode != 0) {
-                    System.err.printf("jq process failed with exit code: %d%n", jqExitCode);
-                    System.exit(jqExitCode);
-                }
-
-                if (gsedExitCode != 0) {
-                    System.err.printf("gsed process failed with exit code: %d%n", gsedExitCode);
-                    System.exit(gsedExitCode);
-                }
-
-                if (gitExitCode != 0) {
-                    System.exit(1);
-                }
-
-            } catch (IOException ex) {
-                System.err.println("Pipeline execution error (missing binary or invalid file): " + ex.getMessage());
-                System.exit(1);
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-                System.err.println("Execution was interrupted.");
-                System.exit(1);
-            }
-    }
-
-    public static final class Output {
-        private final List<Integer> volume;
-        private final List<Integer> dims;
-
-        Output(int[] volume, int[] dims) {
-            this.volume = Arrays.stream(volume).boxed().toList();
-            this.dims = Arrays.stream(dims).boxed().toList();
-        }
-
-        public List<Integer> volume() {
-            return volume;
-        }
-
-        public List<Integer> dims() {
-            return dims;
-        }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (obj == this) return true;
-            if (obj == null || obj.getClass() != this.getClass()) return false;
-            var that = (Output) obj;
-            return this.volume.equals(that.volume) &&
-                    this.dims.equals(that.dims);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(volume.hashCode(), dims.hashCode());
-        }
-
-        @Override
-        public String toString() {
-            var res = new StringBuilder();
-            res.append("[");
-            for (var z = 0; z < this.dims.get(2); z++) {
-                res.append("[");
-                for (var y = 0; y < this.dims.get(1); y++) {
-                    res.append("[");
-                    for (var x = 0; x < this.dims.get(0); x++) {
-                        res.append(this.volume.get(x + dims.get(0) * y + dims.get(0) * dims.get(1) * z));
-                        // res.append(this.volume.get(z + dims.get(2) * y + dims.get(2) * dims.get(1) * x));
-                        // if (z < this.dims.get(2) -1 || y < this.dims.get(1) - 1 || x < this.dims.get(0) - 1) {
-                        if (x < this.dims.get(0) - 1) {
-                            res.append(",");
-                        }
-                    }
-                    res.append("]");
-                    if (y < this.dims.get(1) - 1) {
-                        res.append(",");
-                    }
-                }
-                res.append("]");
-                if (z < this.dims.get(2) - 1) {
-                    res.append(",");
+                try (InputStream gsedStderr = gsedProcess.getErrorStream()) {
+                    gsedStderr.transferTo(System.err);
                 }
             }
-            res.append("]");
-            return res.toString();
+
+            int jqExitCode = jqProcess.waitFor();
+            int gsedExitCode = gsedProcess.waitFor();
+            int gitExitCode = gitProcess.waitFor();
+
+            if (jqExitCode != 0) {
+                System.err.printf("jq process failed with exit code: %d%n", jqExitCode);
+                System.exit(jqExitCode);
+            }
+
+            if (gsedExitCode != 0) {
+                System.err.printf("gsed process failed with exit code: %d%n", gsedExitCode);
+                System.exit(gsedExitCode);
+            }
+
+            if (gitExitCode != 0) {
+                System.exit(1);
+            }
+
+        } catch (IOException ex) {
+            System.err.println("Pipeline execution error (missing binary or invalid file): " + ex.getMessage());
+            System.exit(1);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            System.err.println("Execution was interrupted.");
+            System.exit(1);
         }
-
-
     }
 
     List<List<Integer>> depths = new ArrayList<>();
@@ -206,6 +144,8 @@ public class ShapeCarver {
     public PyObject carve(PythonScriptEngine e, List<List<Integer>> views /* 2d images {x,y,z}-{front,back} */, final int maskColor, boolean[] skip /* views to skip, must have length 6 */) throws ScriptException, NoSuchMethodException {
         Objects.requireNonNull(views);
         Objects.requireNonNull(skip);
+        viewsToNumPy(e, views);
+
 
         //Initialize volume. This is necessary.
         Arrays.fill(volume, -1);
@@ -313,17 +253,6 @@ public class ShapeCarver {
             }
         }
 
-        //Do a final pass to fill in any missing colors
-        var n = 0; // linear index. See loop invariant below
-        for (cursor[2] = 0; cursor[2] < dims[2]; ++cursor[2])
-            for (cursor[1] = 0; cursor[1] < dims[1]; ++cursor[1])
-                for (cursor[0] = 0; cursor[0] < dims[0]; ++cursor[0], ++n) {
-                    assert n == cursor[0] + dims[0] * (cursor[1] + dims[1] * cursor[2]);
-                    if (volume[n] < 0) {
-                        volume[n] = 0xff00ff;
-                    }
-                }
-
         PyObject[] pyObjArr3D = new PyObject[dims[0]];
         for (var i = 0; i < dims[0]; i++) {
             var pyObjArr2D = new PyObject[dims[1]];
@@ -341,8 +270,29 @@ public class ShapeCarver {
         var pyList3D = e.newPyList(pyObjArr3D);
         e.put("xs", pyList3D);
 
-        var numpyList3D = (PyObject) e.eval("np.array(xs)");
-        return numpyList3D;
+        e.put("xs", e.eval("np.array(xs)"));
+
+        //Do a final pass to fill in any missing colors
+        e.put("xs[xs < 0]", 0xff00ff);
+
+        return (PyObject) e.eval("xs");
+    }
+
+    // views has shape like (6, 16 * 16), but for NumPy it gets (3, 2, 16, 16)
+    public static void viewsToNumPy(PythonScriptEngine e, List<List<Integer>> views) throws ScriptException, NoSuchMethodException {
+        var pyObjArr2D = new PyObject[6];
+        for (var i = 0; i < 6; i++) {
+            var pyObjArr1D = new PyObject[views.get(0).size()];
+            for (var j = 0; j < views.get(0).size(); j++) {
+                pyObjArr1D[j] = (PyObject) e.invokeFunction("int", views.get(i).get(j));
+            }
+            var pyList1D = e.newPyList(pyObjArr1D);
+            pyObjArr2D[i] = pyList1D;
+        }
+        var pyList2D = e.newPyList(pyObjArr2D);
+        e.put("views", pyList2D);
+        var sideLen = (int) Math.sqrt(views.get(0).size());
+        e.put("views", e.invokeMethod(e.eval("np.array(views)"), "reshape", 3, 2, sideLen, sideLen));
     }
 }
 
