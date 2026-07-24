@@ -5,7 +5,6 @@ import java.util.*;
 import javax.script.*;
 
 import org.openjdk.engine.python.*;
-import org.openjdk.engine.python.AbstractPythonScriptEngine;
 import org.openjdk.engine.python.AbstractPythonScriptEngine.PyExecMode;
 
 public class ShapeCarver {
@@ -60,7 +59,7 @@ public class ShapeCarver {
         c.dims = new int[]{views[2].length, views[0][0].length, views[0].length};
         var intDType = (PyObject) e.eval("int");
         var npEmpty = (PyObject) e.eval("np.empty");
-        c.volume = (PyObject) npEmpty.call(e.newPyTuple(e.fromJava(c.dims[0]), e.fromJava(c.dims[1]), e.fromJava(c.dims[2])), intDType);
+        c.volume = npEmpty.call(e.newPyTuple(e.fromJava(c.dims[0]), e.fromJava(c.dims[1]), e.fromJava(c.dims[2])), intDType);
 
         var maskColor = 0;
         var npViews = viewsToNumPy(e, viewsAsList);
@@ -149,25 +148,21 @@ public class ShapeCarver {
 
         var npEmpty = (PyObject) e.eval("np.empty");
         var intDType = (PyObject) e.eval("int");
-        var depths = (PyObject) npEmpty.call(views.getAttribute("shape"), intDType);
+        var depths = npEmpty.call(views.getAttribute("shape"), intDType);
         //Initialize depth fields
         for (var d = 0 /* axis */; d < 3; ++d) {
             var u = (d + 1) % 3; // other axis 0
             var v = (d + 2) % 3; // other axis 1
             for (var s = 0; s <= dims[d] - 1; s += dims[d] - 1) {
                 var sIdx = s == 0 ? 0 : 1; // s meaning side
-                var depthsIdx = 2 * d + sIdx;
-                var depthsForView = new int[dims[u] * dims[v]];
                 var idxTuple = e.newPyTuple(e.fromJava(d), e.fromJava(sIdx));
-                var view = (PyObject) views.getItem(idxTuple);
+                var view = views.getItem(idxTuple);
                 var sOp = (s == 0) ? dims[d] - 1 : 0;
                 // TODO: Switch u and v here to match cursor semantics below
                 for (var uIdx = 0; uIdx < dims[u]; uIdx++) {
                     for (var vIdx = 0; vIdx < dims[v]; vIdx++) {
-                        var i = uIdx * dims[v] + vIdx;
                         var shouldSkip = skip.getItem(idxTuple);
                         var pixel = view.getItem(e.newPyTuple(e.fromJava(uIdx), e.fromJava(vIdx))).toLong();
-                        depthsForView[i] = (shouldSkip.isFalse() && pixel == maskColor) ? sOp : s;
                         depths.setItem(e.newPyTuple(e.fromJava(d), e.fromJava(sIdx), e.fromJava(uIdx), e.fromJava(vIdx)),
                                 (shouldSkip.isFalse() && pixel == maskColor) ? e.fromJava(sOp) : e.fromJava(s));
                     }
@@ -198,20 +193,18 @@ public class ShapeCarver {
                 //Do front/back sweep
                 for (var s = -1; s <= 1; s += 2) {
                     var sIdx = s < 0 ? 1 : 0;
-                    var vNum = 2 * d + sIdx;
                     var idxTuple = e.newPyTuple(e.fromJava(d), e.fromJava(sIdx));
                     if (skip.getItem(idxTuple).isTrue()) {
                         continue;
                     }
 
-                    var view = (PyObject) views.getItem(idxTuple);
+                    var view = views.getItem(idxTuple);
                     var depth = depths.getItem(idxTuple);
 
                     for (cursor[v] = 0; cursor[v] < dims[v]; ++cursor[v])
                         for (cursor[u] = 0; cursor[u] < dims[u]; ++cursor[u]) {
 
                             //March along ray
-                            var bufIdx = cursor[u] + cursor[v] * dims[u];
                             for (cursor[d] = depth.getItem(e.newPyTuple(e.fromJava(cursor[v]), e.fromJava(cursor[u]))).toLong(); 0 <= cursor[d] && cursor[d] < dims[d]; cursor[d] += s) {
 
                                 //Read volume color
@@ -221,25 +214,23 @@ public class ShapeCarver {
                                     continue;
                                 }
                                 volume.setItem(volIdx, view.getItem(e.newPyTuple(e.fromJava(cursor[v]), e.fromJava(cursor[u]))));
-                                color = volume.getItem(volIdx).toLong();;
+                                color = volume.getItem(volIdx).toLong();
 
                                 //Check photo-consistency of volume at cursor
                                 var consistent = true;
                                 for (var a = 0; consistent && a < 3; ++a) {
                                     var b = (a + 1) % 3;
                                     var c = (a + 2) % 3;
-                                    var idx = cursor[b] + dims[b] * cursor[c];
                                     for (var t = 0; t < 2; ++t) {
-                                        var fnum = 2 * a + t;
                                         idxTuple = e.newPyTuple(e.fromJava(a), e.fromJava(t));
                                         if (skip.getItem(idxTuple).isTrue()) {
                                             continue;
                                         }
                                         var idxTupleInner = e.newPyTuple(e.fromJava(a), e.fromJava(t), e.fromJava(cursor[c]), e.fromJava(cursor[b]));
-                                        var fcolor = views.getItem(idxTupleInner).toLong();
-                                        var fdepth = depths.getItem(idxTupleInner).toLong();
-                                        if (t != 0 ? fdepth <= cursor[a] : cursor[a] <= fdepth) {
-                                            if (fcolor != color) {
+                                        var fColor = views.getItem(idxTupleInner).toLong();
+                                        var fDepth = depths.getItem(idxTupleInner).toLong();
+                                        if (t != 0 ? fDepth <= cursor[a] : cursor[a] <= fDepth) {
+                                            if (fColor != color) {
                                                 consistent = false;
                                                 break;
                                             }
@@ -272,8 +263,8 @@ public class ShapeCarver {
     public static PyObject viewsToNumPy(PythonScriptEngine e, List<List<Integer>> views) throws ScriptException, NoSuchMethodException {
         var pyObjArr2D = new PyObject[6];
         for (var i = 0; i < 6; i++) {
-            var pyObjArr1D = new PyObject[views.get(0).size()];
-            for (var j = 0; j < views.get(0).size(); j++) {
+            var pyObjArr1D = new PyObject[views.getFirst().size()];
+            for (var j = 0; j < views.getFirst().size(); j++) {
                 pyObjArr1D[j] = (PyObject) e.invokeFunction("int", views.get(i).get(j));
             }
             var pyList1D = e.newPyList(pyObjArr1D);
@@ -281,7 +272,7 @@ public class ShapeCarver {
         }
         var pyList2D = e.newPyList(pyObjArr2D);
         e.put("views", pyList2D);
-        var sideLen = (int) Math.sqrt(views.get(0).size());
+        var sideLen = (int) Math.sqrt(views.getFirst().size());
         return (PyObject) e.invokeMethod(e.eval("np.array(views)"), "reshape", 3, 2, sideLen, sideLen);
     }
 }
