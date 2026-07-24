@@ -56,12 +56,12 @@ public class ShapeCarver {
         // 0 (z, y)
         // 1 (x, z)
         // 2 (y, x)
-        c.dims = new int[]{views[2].length, views[0][0].length, views[0].length};
+        c.dims = e.newPyTuple(e.fromJava(views[2].length), e.fromJava(views[0][0].length), e.fromJava(views[0].length));
         var intDType = (PyObject) e.eval("int");
         var npEmpty = (PyObject) e.eval("np.empty");
-        c.volume = npEmpty.call(e.newPyTuple(e.fromJava(c.dims[0]), e.fromJava(c.dims[1]), e.fromJava(c.dims[2])), intDType);
+        c.volume = npEmpty.call(c.dims, intDType);
 
-        var maskColor = 0;
+        var maskColor = e.fromJava(0);
         var npViews = viewsToNumPy(e, viewsAsList);
         var npZeros = (PyObject) e.eval("np.zeros");
         var boolDType = (PyObject) e.eval("bool");
@@ -133,11 +133,11 @@ public class ShapeCarver {
         }
     }
 
-    int[] dims; /* cuboid shape */
+    PyTuple dims; /* cuboid shape */
     PyObject volume;
 
     // note that JavaFX uses a y-down coordinate system, so the views are left, right, top, bottom, front, back
-    public PyObject carve(PythonScriptEngine e, PyObject views /* 2d images {x,y,z}-{front,back} */, final int maskColor, PyObject skip /* views to skip, must have shape (3, 2) */) throws ScriptException, NoSuchMethodException {
+    public PyObject carve(PythonScriptEngine e, PyObject views /* 2d images {x,y,z}-{front,back} */, final PyObject maskColor, PyObject skip /* views to skip, must have shape (3, 2) */) throws ScriptException, NoSuchMethodException {
         Objects.requireNonNull(views);
         Objects.requireNonNull(skip);
 
@@ -150,35 +150,37 @@ public class ShapeCarver {
         var depths = npEmpty.call(views.getAttribute("shape"), intDType);
         var cursor = npEmpty.call(e.fromJava(3), intDType); // (z, y, x)
         //Initialize depth fields
-        for (var d = 0 /* axis */; d < 3; ++d) {
-            var u = (d + 1) % 3; // other axis 0
-            var v = (d + 2) % 3; // other axis 1
-            for (var s = 0; s <= dims[d] - 1; s += dims[d] - 1) {
+        for (PyObject d = e.fromJava(0) /* axis */;
+                ((PyObject) e.invokeMethod(d, "__lt__", e.fromJava(3))).isTrue();
+                d = (PyObject) e.invokeMethod(d, "__add__", 1)) {
+            var u = (PyObject) e.invokeMethod((PyObject) e.invokeMethod(d, "__add__", 1), "__mod__", 3); // other axis 0
+            var v = (PyObject) e.invokeMethod((PyObject) e.invokeMethod(d, "__add__", 2), "__mod__", 3); // other axis 1
+            for (var s = 0; s <= dims.getItem(d).toLong() - 1; s += dims.getItem(d).toLong() - 1) {
                 var sIdx = s == 0 ? 0 : 1; // s meaning side
-                var idxTuple = e.newPyTuple(e.fromJava(d), e.fromJava(sIdx));
+                var idxTuple = e.newPyTuple(d, e.fromJava(sIdx));
                 var view = views.getItem(idxTuple);
-                var sOp = (s == 0) ? dims[d] - 1 : 0;
+                var sOp = (s == 0) ? dims.getItem(d).toLong() - 1 : 0;
                 // TODO: Switch u and v here to match cursor semantics below
-                for (var uIdx = 0; uIdx < dims[u]; uIdx++) {
-                    for (var vIdx = 0; vIdx < dims[v]; vIdx++) {
+                for (var uIdx = 0L; uIdx < dims.getItem(u).toLong(); uIdx++) {
+                    for (var vIdx = 0; vIdx < dims.getItem(v).toLong(); vIdx++) {
                         var shouldSkip = skip.getItem(idxTuple);
                         var pixel = view.getItem(e.newPyTuple(e.fromJava(uIdx), e.fromJava(vIdx))).toLong();
-                        depths.setItem(e.newPyTuple(e.fromJava(d), e.fromJava(sIdx), e.fromJava(uIdx), e.fromJava(vIdx)),
-                                (shouldSkip.isFalse() && pixel == maskColor) ? e.fromJava(sOp) : e.fromJava(s));
+                        depths.setItem(e.newPyTuple(d, e.fromJava(sIdx), e.fromJava(uIdx), e.fromJava(vIdx)),
+                                (shouldSkip.isFalse() && pixel == maskColor.toLong()) ? e.fromJava(sOp) : e.fromJava(s));
                     }
                 }
 
             }
 
             //Clear out volume where ray goes through entirely
-            for (cursor.setItem(e.fromJava(v), e.fromJava(0)); cursor.getItem(e.fromJava(v)).toLong() < dims[v]; cursor.setItem(e.fromJava(v), (PyObject) e.invokeMethod(cursor.getItem(e.fromJava(v)), "__add__", e.fromJava(1)))) {
-                for (cursor.setItem(e.fromJava(u), e.fromJava(0)); cursor.getItem(e.fromJava(u)).toLong() < dims[u]; cursor.setItem(e.fromJava(u), (PyObject) e.invokeMethod(cursor.getItem(e.fromJava(u)), "__add__", e.fromJava(1)))) {
-                    for (cursor.setItem(e.fromJava(d), depths.getItem(e.newPyTuple(e.fromJava(d), e.fromJava(1), cursor.getItem(e.fromJava(v)), cursor.getItem(e.fromJava(u)))));
-                            cursor.getItem(e.fromJava(d)).toLong() <= depths.getItem(e.newPyTuple(e.fromJava(d), e.fromJava(0), cursor.getItem(e.fromJava(v)), cursor.getItem(e.fromJava(u)))).toLong();
-                            cursor.setItem(e.fromJava(d), (PyObject) e.invokeMethod(cursor.getItem(e.fromJava(d)), "__add__", e.fromJava(1)))) {
+            for (cursor.setItem(v, e.fromJava(0)); cursor.getItem(v).toLong() < dims.getItem(v).toLong(); cursor.setItem(v, (PyObject) e.invokeMethod(cursor.getItem(v), "__add__", e.fromJava(1)))) {
+                for (cursor.setItem(u, e.fromJava(0)); cursor.getItem(u).toLong() < dims.getItem(u).toLong(); cursor.setItem(u, (PyObject) e.invokeMethod(cursor.getItem(u), "__add__", e.fromJava(1)))) {
+                    for (cursor.setItem(d, depths.getItem(e.newPyTuple(d, e.fromJava(1), cursor.getItem(v), cursor.getItem(u))));
+                            cursor.getItem(d).toLong() <= depths.getItem(e.newPyTuple(d, e.fromJava(0), cursor.getItem(v), cursor.getItem(u))).toLong();
+                            cursor.setItem(d, (PyObject) e.invokeMethod(cursor.getItem(d), "__add__", e.fromJava(1)))) {
                         var slice = (PyObject) e.eval("slice");
                         var tuple = (PyObject) e.eval("tuple");
-                        volume.setItem(tuple.call(cursor.getItem(slice.call(e.getNone(), e.getNone(), e.fromJava(-1)))), e.fromJava(maskColor));
+                        volume.setItem(tuple.call(cursor.getItem(slice.call(e.getNone(), e.getNone(), e.fromJava(-1)))), maskColor);
                     }
                 }
             }
@@ -203,16 +205,16 @@ public class ShapeCarver {
                     var view = views.getItem(idxTuple);
                     var depth = depths.getItem(idxTuple);
 
-                    for (cursor.setItem(e.fromJava(v), e.fromJava(0)); cursor.getItem(e.fromJava(v)).toLong() < dims[v]; cursor.setItem(e.fromJava(v), (PyObject) e.invokeMethod(cursor.getItem(e.fromJava(v)), "__add__", e.fromJava(1))))
-                        for (cursor.setItem(e.fromJava(u), e.fromJava(0)); cursor.getItem(e.fromJava(u)).toLong() < dims[u]; cursor.setItem(e.fromJava(u), (PyObject) e.invokeMethod(cursor.getItem(e.fromJava(u)), "__add__", e.fromJava(1)))) {
+                    for (cursor.setItem(e.fromJava(v), e.fromJava(0)); cursor.getItem(e.fromJava(v)).toLong() < dims.getItem(e.fromJava(v)).toLong(); cursor.setItem(e.fromJava(v), (PyObject) e.invokeMethod(cursor.getItem(e.fromJava(v)), "__add__", e.fromJava(1))))
+                        for (cursor.setItem(e.fromJava(u), e.fromJava(0)); cursor.getItem(e.fromJava(u)).toLong() < dims.getItem(e.fromJava(u)).toLong(); cursor.setItem(e.fromJava(u), (PyObject) e.invokeMethod(cursor.getItem(e.fromJava(u)), "__add__", e.fromJava(1)))) {
 
                             //March along ray
-                            for (cursor.setItem(e.fromJava(d), depth.getItem(e.newPyTuple(cursor.getItem(e.fromJava(v)), cursor.getItem(e.fromJava(u))))); 0 <= cursor.getItem(e.fromJava(d)).toLong() && cursor.getItem(e.fromJava(d)).toLong() < dims[d]; cursor.setItem(e.fromJava(d), (PyObject) e.invokeMethod(cursor.getItem(e.fromJava(d)), "__add__", s))) {
+                            for (cursor.setItem(e.fromJava(d), depth.getItem(e.newPyTuple(cursor.getItem(e.fromJava(v)), cursor.getItem(e.fromJava(u))))); 0 <= cursor.getItem(e.fromJava(d)).toLong() && cursor.getItem(e.fromJava(d)).toLong() < dims.getItem(e.fromJava(d)).toLong(); cursor.setItem(e.fromJava(d), (PyObject) e.invokeMethod(cursor.getItem(e.fromJava(d)), "__add__", s))) {
 
                                 //Read volume color
                                 var volIdx = e.newPyTuple(cursor.getItem(e.fromJava(2)), cursor.getItem(e.fromJava(1)), cursor.getItem(e.fromJava(0)));
                                 var color = volume.getItem(volIdx).toLong();
-                                if (color == maskColor) {
+                                if (color == maskColor.toLong()) {
                                     continue;
                                 }
                                 volume.setItem(volIdx, view.getItem(e.newPyTuple(cursor.getItem(e.fromJava(v)), cursor.getItem(e.fromJava(u)))));
