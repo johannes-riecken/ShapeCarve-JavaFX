@@ -134,8 +134,7 @@ public class ShapeCarver {
         }
     }
 
-    int[][] depths = new int[6][];
-    int[] cursor = new int[3]; // (z, y, x)
+    long[] cursor = new long[3]; // (z, y, x)
     int[] dims; /* cuboid shape */
     PyObject volume;
 
@@ -148,6 +147,9 @@ public class ShapeCarver {
         //Initialize volume. This is necessary.
         e.invokeMethod(volume, "fill", -1);
 
+        var npEmpty = (PyObject) e.eval("np.empty");
+        var intDType = (PyObject) e.eval("int");
+        var depths = (PyObject) npEmpty.call(views.getAttribute("shape"), intDType);
         //Initialize depth fields
         for (var d = 0 /* axis */; d < 3; ++d) {
             var u = (d + 1) % 3; // other axis 0
@@ -159,22 +161,26 @@ public class ShapeCarver {
                 var idxTuple = e.newPyTuple(e.fromJava(d), e.fromJava(sIdx));
                 var view = (PyObject) views.getItem(idxTuple);
                 var sOp = (s == 0) ? dims[d] - 1 : 0;
+                // TODO: Switch u and v here to match cursor semantics below
                 for (var uIdx = 0; uIdx < dims[u]; uIdx++) {
                     for (var vIdx = 0; vIdx < dims[v]; vIdx++) {
                         var i = uIdx * dims[v] + vIdx;
                         var shouldSkip = skip.getItem(idxTuple);
                         var pixel = view.getItem(e.newPyTuple(e.fromJava(uIdx), e.fromJava(vIdx))).toLong();
                         depthsForView[i] = (shouldSkip.isFalse() && pixel == maskColor) ? sOp : s;
+                        depths.setItem(e.newPyTuple(e.fromJava(d), e.fromJava(sIdx), e.fromJava(uIdx), e.fromJava(vIdx)),
+                                (shouldSkip.isFalse() && pixel == maskColor) ? e.fromJava(sOp) : e.fromJava(s));
                     }
                 }
-                depths[depthsIdx] = depthsForView;;
 
             }
 
             //Clear out volume where ray goes through entirely
             for (cursor[v] = 0; cursor[v] < dims[v]; ++cursor[v]) {
                 for (cursor[u] = 0; cursor[u] < dims[u]; ++cursor[u]) {
-                    for (cursor[d] = depths[2 * d + 1][cursor[u] + dims[u] * cursor[v]]; cursor[d] <= depths[2 * d][cursor[u] + dims[u] * cursor[v]]; ++cursor[d]) {
+                    for (cursor[d] = depths.getItem(e.newPyTuple(e.fromJava(d), e.fromJava(1), e.fromJava(cursor[v]), e.fromJava(cursor[u]))).toLong();
+                            cursor[d] <= depths.getItem(e.newPyTuple(e.fromJava(d), e.fromJava(0), e.fromJava(cursor[v]), e.fromJava(cursor[u]))).toLong();
+                            ++cursor[d]) {
                         volume.setItem(e.newPyTuple(e.fromJava(cursor[2]), e.fromJava(cursor[1]), e.fromJava(cursor[0])), e.fromJava(maskColor));
                     }
                 }
@@ -199,14 +205,14 @@ public class ShapeCarver {
                     }
 
                     var view = (PyObject) views.getItem(idxTuple);
-                    var depth = depths[vNum];
+                    var depth = depths.getItem(idxTuple);
 
                     for (cursor[v] = 0; cursor[v] < dims[v]; ++cursor[v])
                         for (cursor[u] = 0; cursor[u] < dims[u]; ++cursor[u]) {
 
                             //March along ray
                             var bufIdx = cursor[u] + cursor[v] * dims[u];
-                            for (cursor[d] = depth[bufIdx]; 0 <= cursor[d] && cursor[d] < dims[d]; cursor[d] += s) {
+                            for (cursor[d] = depth.getItem(e.newPyTuple(e.fromJava(cursor[v]), e.fromJava(cursor[u]))).toLong(); 0 <= cursor[d] && cursor[d] < dims[d]; cursor[d] += s) {
 
                                 //Read volume color
                                 var volIdx = e.newPyTuple(e.fromJava(cursor[2]), e.fromJava(cursor[1]), e.fromJava(cursor[0]));
@@ -229,8 +235,9 @@ public class ShapeCarver {
                                         if (skip.getItem(idxTuple).isTrue()) {
                                             continue;
                                         }
-                                        var fcolor = views.getItem(e.newPyTuple(e.fromJava(a), e.fromJava(t), e.fromJava(cursor[c]), e.fromJava(cursor[b]))).toLong();
-                                        var fdepth = depths[fnum][idx];
+                                        var idxTupleInner = e.newPyTuple(e.fromJava(a), e.fromJava(t), e.fromJava(cursor[c]), e.fromJava(cursor[b]));
+                                        var fcolor = views.getItem(idxTupleInner).toLong();
+                                        var fdepth = depths.getItem(idxTupleInner).toLong();
                                         if (t != 0 ? fdepth <= cursor[a] : cursor[a] <= fdepth) {
                                             if (fcolor != color) {
                                                 consistent = false;
@@ -249,7 +256,7 @@ public class ShapeCarver {
                             }
 
                             //Update depth value
-                            depth[bufIdx] = cursor[d];
+                            depth.setItem(e.newPyTuple(e.fromJava(cursor[v]), e.fromJava(cursor[u])), e.fromJava(cursor[d]));
                         }
                 }
             }
