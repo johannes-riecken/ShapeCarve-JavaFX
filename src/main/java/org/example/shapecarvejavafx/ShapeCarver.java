@@ -58,7 +58,9 @@ public class ShapeCarver {
         // 1 (x, z)
         // 2 (y, x)
         c.dims = new int[]{views[2].length, views[0][0].length, views[0].length};
-        c.volume = new int[c.dims[0] * c.dims[1] * c.dims[2]];
+        var intDType = (PyObject) e.eval("int");
+        var npEmpty = (PyObject) e.eval("np.empty");
+        c.volume = (PyObject) npEmpty.call(e.newPyTuple(e.fromJava(c.dims[0]), e.fromJava(c.dims[1]), e.fromJava(c.dims[2])), intDType);
 
         var maskColor = 0;
         e.put("res", c.carve(e, viewsAsList, maskColor, new boolean[]{
@@ -138,7 +140,7 @@ public class ShapeCarver {
     List<List<Integer>> depths = new ArrayList<>();
     int[] cursor = new int[3]; // (z, y, x)
     int[] dims; /* cuboid shape */
-    int[] volume;
+    PyObject volume;
 
     // note that JavaFX uses a y-down coordinate system, so the views are left, right, top, bottom, front, back
     public PyObject carve(PythonScriptEngine e, List<List<Integer>> views /* 2d images {x,y,z}-{front,back} */, final int maskColor, boolean[] skip /* views to skip, must have length 6 */) throws ScriptException, NoSuchMethodException {
@@ -148,7 +150,7 @@ public class ShapeCarver {
 
 
         //Initialize volume. This is necessary.
-        Arrays.fill(volume, -1);
+        e.invokeMethod(volume, "fill", -1);
 
         //Initialize depth fields
         for (var d = 0 /* axis */; d < 3; ++d) {
@@ -176,7 +178,7 @@ public class ShapeCarver {
             for (cursor[v] = 0; cursor[v] < dims[v]; ++cursor[v]) {
                 for (cursor[u] = 0; cursor[u] < dims[u]; ++cursor[u]) {
                     for (cursor[d] = depths.get(2 * d + 1).get(cursor[u] + dims[u] * cursor[v]); cursor[d] <= depths.get(2 * d).get(cursor[u] + dims[u] * cursor[v]); ++cursor[d]) {
-                        volume[cursor[0] + dims[0] * (cursor[1] + dims[1] * cursor[2])] = maskColor;
+                        volume.setItem(e.newPyTuple(e.fromJava(cursor[2]), e.fromJava(cursor[1]), e.fromJava(cursor[0])), e.fromJava(maskColor));
                     }
                 }
             }
@@ -208,13 +210,13 @@ public class ShapeCarver {
                             for (cursor[d] = depth.get(bufIdx); 0 <= cursor[d] && cursor[d] < dims[d]; cursor[d] += s) {
 
                                 //Read volume color
-                                var volIdx = cursor[0] + dims[0] * (cursor[1] + dims[1] * cursor[2]);
-                                var color = volume[volIdx];
+                                var volIdx = e.newPyTuple(e.fromJava(cursor[2]), e.fromJava(cursor[1]), e.fromJava(cursor[0]));
+                                var color = volume.getItem(volIdx).toLong();
                                 if (color == maskColor) {
                                     continue;
                                 }
-
-                                color = volume[volIdx] = view.get(cursor[u] + dims[u] * cursor[v]);
+                                volume.setItem(volIdx, e.fromJava(view.get(cursor[u] + dims[u] * cursor[v])));
+                                color = volume.getItem(volIdx).toLong();;
 
                                 //Check photo-consistency of volume at cursor
                                 var consistent = true;
@@ -243,7 +245,7 @@ public class ShapeCarver {
 
                                 //Clear out voxel
                                 ++removed;
-                                volume[volIdx] = maskColor;
+                                volume.setItem(volIdx, e.fromJava(maskColor));
                             }
 
                             //Update depth value
@@ -253,29 +255,10 @@ public class ShapeCarver {
             }
         }
 
-        PyObject[] pyObjArr3D = new PyObject[dims[0]];
-        for (var i = 0; i < dims[0]; i++) {
-            var pyObjArr2D = new PyObject[dims[1]];
-            for (var j = 0; j < dims[1]; j++) {
-                var pyObjArr1D = new PyObject[dims[0]];
-                for (var k = 0; k < dims[2]; k++) {
-                    pyObjArr1D[k] = (PyObject) e.invokeFunction("int", volume[k + dims[0] * (j + dims[1] * i)]);
-                }
-                var pyList1D = e.newPyList(pyObjArr1D);
-                pyObjArr2D[j] = pyList1D;
-            }
-            var pyList2D = e.newPyList(pyObjArr2D);
-            pyObjArr3D[i] = pyList2D;
-        }
-        var pyList3D = e.newPyList(pyObjArr3D);
-        e.put("xs", pyList3D);
+        ////Do a final pass to fill in any missing colors
+        volume.setItem((PyObject) e.invokeMethod(volume, "__lt__", 0), e.fromJava(0xff00ff));
 
-        e.put("xs", e.eval("np.array(xs)"));
-
-        //Do a final pass to fill in any missing colors
-        e.put("xs[xs < 0]", 0xff00ff);
-
-        return (PyObject) e.eval("xs");
+        return volume;
     }
 
     // views has shape like (6, 16 * 16), but for NumPy it gets (3, 2, 16, 16)
