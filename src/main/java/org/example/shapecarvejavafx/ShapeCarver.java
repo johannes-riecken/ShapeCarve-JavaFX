@@ -64,14 +64,10 @@ public class ShapeCarver {
 
         var maskColor = 0;
         var npViews = viewsToNumPy(e, viewsAsList);
-        e.put("res", c.carve(e, npViews, maskColor, new boolean[]{
-                false,
-                false,
-                false,
-                false,
-                false,
-                false
-        }));
+        var npZeros = (PyObject) e.eval("np.zeros");
+        var boolDType = (PyObject) e.eval("bool");
+        var skip = npZeros.call(e.newPyTuple(e.fromJava(3), e.fromJava(2)), boolDType);
+        e.put("res", c.carve(e, npViews, maskColor, skip));
         var printWriter = new PrintWriter("volume.txt");
         printWriter.println(toZyxString(e.eval("res.tolist()")));
         printWriter.close();
@@ -144,7 +140,7 @@ public class ShapeCarver {
     PyObject volume;
 
     // note that JavaFX uses a y-down coordinate system, so the views are left, right, top, bottom, front, back
-    public PyObject carve(PythonScriptEngine e, PyObject views /* 2d images {x,y,z}-{front,back} */, final int maskColor, boolean[] skip /* views to skip, must have length 6 */) throws ScriptException, NoSuchMethodException {
+    public PyObject carve(PythonScriptEngine e, PyObject views /* 2d images {x,y,z}-{front,back} */, final int maskColor, PyObject skip /* views to skip, must have shape (3, 2) */) throws ScriptException, NoSuchMethodException {
         Objects.requireNonNull(views);
         Objects.requireNonNull(skip);
 
@@ -160,14 +156,15 @@ public class ShapeCarver {
                 var sIdx = s == 0 ? 0 : 1; // s meaning side
                 var depthsIdx = 2 * d + sIdx;
                 var depthsForView = new int[dims[u] * dims[v]];
-                var view = (PyObject) views.getItem(e.newPyTuple(e.fromJava(d), e.fromJava(sIdx)));
+                var idxTuple = e.newPyTuple(e.fromJava(d), e.fromJava(sIdx));
+                var view = (PyObject) views.getItem(idxTuple);
                 var sOp = (s == 0) ? dims[d] - 1 : 0;
                 for (var uIdx = 0; uIdx < dims[u]; uIdx++) {
                     for (var vIdx = 0; vIdx < dims[v]; vIdx++) {
                         var i = uIdx * dims[v] + vIdx;
-                        var shouldSkip = skip[depthsIdx];
+                        var shouldSkip = skip.getItem(idxTuple);
                         var pixel = view.getItem(e.newPyTuple(e.fromJava(uIdx), e.fromJava(vIdx))).toLong();
-                        depthsForView[i] = (!shouldSkip && pixel == maskColor) ? sOp : s;
+                        depthsForView[i] = (shouldSkip.isFalse() && pixel == maskColor) ? sOp : s;
                     }
                 }
                 depths[depthsIdx] = depthsForView;;
@@ -195,12 +192,13 @@ public class ShapeCarver {
                 //Do front/back sweep
                 for (var s = -1; s <= 1; s += 2) {
                     var sIdx = s < 0 ? 1 : 0;
-                    var vNum = 2 * d + ((s < 0) ? 1 : 0);
-                    if (skip[vNum]) {
+                    var vNum = 2 * d + sIdx;
+                    var idxTuple = e.newPyTuple(e.fromJava(d), e.fromJava(sIdx));
+                    if (skip.getItem(idxTuple).isTrue()) {
                         continue;
                     }
 
-                    var view = (PyObject) views.getItem(e.newPyTuple(e.fromJava(d), e.fromJava(sIdx)));
+                    var view = (PyObject) views.getItem(idxTuple);
                     var depth = depths[vNum];
 
                     for (cursor[v] = 0; cursor[v] < dims[v]; ++cursor[v])
@@ -227,7 +225,8 @@ public class ShapeCarver {
                                     var idx = cursor[b] + dims[b] * cursor[c];
                                     for (var t = 0; t < 2; ++t) {
                                         var fnum = 2 * a + t;
-                                        if (skip[fnum]) {
+                                        idxTuple = e.newPyTuple(e.fromJava(a), e.fromJava(t));
+                                        if (skip.getItem(idxTuple).isTrue()) {
                                             continue;
                                         }
                                         var fcolor = views.getItem(e.newPyTuple(e.fromJava(a), e.fromJava(t), e.fromJava(cursor[c]), e.fromJava(cursor[b]))).toLong();
