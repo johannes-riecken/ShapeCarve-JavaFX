@@ -232,70 +232,97 @@ public class ShapeCarver {
         var cond = (PyObject) (e.invokeMethod(removed, "__gt__", e.fromJava(0)));
         while (cond.isTrue()) {
             removed = e.fromJava(0);
-            for (var d = 0; d < 3; ++d) {
-                var u = (d + 1) % 3;
-                var v = (d + 2) % 3;
+            var dItNew = e.invokeMethod(e.invokeFunction("range", e.fromJava(3)), "__iter__");
+            while (true) {
+                try {
+                    var d = (PyObject) e.invokeMethod(dItNew, "__next__");
+                    var u = (PyObject) e.invokeMethod((PyObject) e.invokeMethod(d, "__add__", e.fromJava(1)), "__mod__", e.fromJava(3)); // other axis 0
+                    var v = (PyObject) e.invokeMethod((PyObject) e.invokeMethod(d, "__add__", e.fromJava(2)), "__mod__", e.fromJava(3)); // other axis 1
 
-                //Do front/back sweep
-                for (var s = -1; s <= 1; s += 2) {
-                    var sIdx = s < 0 ? 1 : 0;
-                    var idxTuple = e.newPyTuple(e.fromJava(d), e.fromJava(sIdx));
-                    if (skip.getItem(idxTuple).isTrue()) {
-                        continue;
-                    }
+                    //Do front/back sweep
+                    var sIdxIt = e.invokeMethod(e.invokeFunction("range", e.fromJava(2)), "__iter__");
+                    while (true) {
+                        try {
+                            var sIdx = e.invokeMethod(sIdxIt, "__next__");
+                            var s = e.invokeMethod(e.invokeMethod(sIdx, "__mul__", -2), "__add__", 1);
+                            var idxTuple = e.newPyTuple(d, e.fromJava(sIdx));
+                            if (skip.getItem(idxTuple).isTrue()) {
+                                continue;
+                            }
 
-                    var view = views.getItem(idxTuple);
-                    var depth = depths.getItem(idxTuple);
+                            var view = views.getItem(idxTuple);
+                            var depth = depths.getItem(idxTuple);
 
-                    for (cursor.setItem(e.fromJava(v), e.fromJava(0)); cursor.getItem(e.fromJava(v)).toLong() < dims.getItem(e.fromJava(v)).toLong(); cursor.setItem(e.fromJava(v), (PyObject) e.invokeMethod(cursor.getItem(e.fromJava(v)), "__add__", e.fromJava(1)))) {
-                        for (cursor.setItem(e.fromJava(u), e.fromJava(0)); cursor.getItem(e.fromJava(u)).toLong() < dims.getItem(e.fromJava(u)).toLong(); cursor.setItem(e.fromJava(u), (PyObject) e.invokeMethod(cursor.getItem(e.fromJava(u)), "__add__", e.fromJava(1)))) {
+                            for (cursor.setItem(v, e.fromJava(0)); cursor.getItem(v).toLong() < dims.getItem(v).toLong(); cursor.setItem(v, (PyObject) e.invokeMethod(cursor.getItem(v), "__add__", e.fromJava(1)))) {
+                                for (cursor.setItem(u, e.fromJava(0)); cursor.getItem(u).toLong() < dims.getItem(u).toLong(); cursor.setItem(u, (PyObject) e.invokeMethod(cursor.getItem(u), "__add__", e.fromJava(1)))) {
 
-                            //March along ray
-                            for (cursor.setItem(e.fromJava(d), depth.getItem(e.newPyTuple(cursor.getItem(e.fromJava(v)), cursor.getItem(e.fromJava(u))))); 0 <= cursor.getItem(e.fromJava(d)).toLong() && cursor.getItem(e.fromJava(d)).toLong() < dims.getItem(e.fromJava(d)).toLong(); cursor.setItem(e.fromJava(d), (PyObject) e.invokeMethod(cursor.getItem(e.fromJava(d)), "__add__", s))) {
+                                    //March along ray
+                                    for (cursor.setItem(d, depth.getItem(e.newPyTuple(cursor.getItem(v), cursor.getItem(u)))); 0 <= cursor.getItem(d).toLong() && cursor.getItem(d).toLong() < dims.getItem(d).toLong(); cursor.setItem(d, (PyObject) e.invokeMethod(cursor.getItem(d), "__add__", s))) {
 
-                                //Read volume color
-                                var volIdx = e.newPyTuple(cursor.getItem(e.fromJava(2)), cursor.getItem(e.fromJava(1)), cursor.getItem(e.fromJava(0)));
-                                var color = volume.getItem(volIdx);
-                                if (((PyObject) e.invokeMethod(color, "__eq__", maskColor)).isTrue()) {
-                                    continue;
-                                }
-                                volume.setItem(volIdx, view.getItem(e.newPyTuple(cursor.getItem(e.fromJava(v)), cursor.getItem(e.fromJava(u)))));
-                                color = volume.getItem(volIdx);
-
-                                //Check photo-consistency of volume at cursor
-                                var consistent = true;
-                                for (var a = 0; consistent && a < 3; ++a) {
-                                    var b = (a + 1) % 3;
-                                    var c = (a + 2) % 3;
-                                    for (var t = 0; t < 2; ++t) {
-                                        idxTuple = e.newPyTuple(e.fromJava(a), e.fromJava(t));
-                                        if (skip.getItem(idxTuple).isTrue()) {
+                                        //Read volume color
+                                        var volIdx = e.newPyTuple(cursor.getItem(e.fromJava(2)), cursor.getItem(e.fromJava(1)), cursor.getItem(e.fromJava(0)));
+                                        var color = volume.getItem(volIdx);
+                                        if (((PyObject) e.invokeMethod(color, "__eq__", maskColor)).isTrue()) {
                                             continue;
                                         }
-                                        var idxTupleInner = e.newPyTuple(e.fromJava(a), e.fromJava(t), cursor.getItem(e.fromJava(c)), cursor.getItem(e.fromJava(b)));
-                                        var fColor = views.getItem(idxTupleInner);
-                                        var fDepth = depths.getItem(idxTupleInner).toLong();
-                                        if (t != 0 ? fDepth <= cursor.getItem(e.fromJava(a)).toLong() : cursor.getItem(e.fromJava(a)).toLong() <= fDepth) {
-                                            if (((PyObject) e.invokeMethod(fColor, "__ne__", color)).isTrue()) {
-                                                consistent = false;
+                                        volume.setItem(volIdx, view.getItem(e.newPyTuple(cursor.getItem(v), cursor.getItem(u))));
+                                        color = volume.getItem(volIdx);
+
+                                        //Check photo-consistency of volume at cursor
+                                        var consistent = e.getTrue();
+                                        var aIt = e.invokeMethod(e.invokeFunction("range", e.fromJava(3)), "__iter__");
+                                        while (true) {
+                                            try {
+                                                var a = (PyObject) e.invokeMethod(aIt, "__next__");
+                                                var b = (PyObject) e.invokeMethod(e.invokeMethod(a, "__add__", e.fromJava(1)), "__mod__", 3);
+                                                var c = (PyObject) e.invokeMethod(e.invokeMethod(a, "__add__", e.fromJava(2)), "__mod__", 3);
+                                                var tIt = e.invokeMethod(e.invokeFunction("range", e.fromJava(2)), "__iter__");
+                                                while (true) {
+                                                    try {
+                                                        var t = (PyObject) e.invokeMethod(tIt, "__next__");
+                                                        idxTuple = e.newPyTuple(a, t);
+                                                        if (skip.getItem(idxTuple).isTrue()) {
+                                                            continue;
+                                                        }
+                                                        var idxTupleInner = e.newPyTuple(a, t, cursor.getItem(c), cursor.getItem(b));
+                                                        var fColor = views.getItem(idxTupleInner);
+                                                        var fDepth = depths.getItem(idxTupleInner);
+                                                        if ((((PyObject) e.invokeMethod(t, "__ne__", e.fromJava(0))).isTrue() ? (PyObject) e.invokeMethod(fDepth, "__le__", cursor.getItem(a)) : (PyObject) e.invokeMethod(cursor.getItem(a), "__le__", fDepth)).isTrue()) {
+                                                            if (((PyObject) e.invokeMethod(fColor, "__ne__", color)).isTrue()) {
+                                                                consistent = e.getFalse();
+                                                                break;
+                                                            }
+                                                        }
+                                                    } catch (Exception ex) {
+                                                        break;
+                                                    }
+                                                }
+                                                if (consistent.isFalse()) {
+                                                    break;
+                                                }
+                                            } catch (Exception ex) {
                                                 break;
                                             }
                                         }
+                                        if (consistent.isTrue()) {
+                                            break;
+                                        }
+
+                                        //Clear out voxel
+                                        removed = (PyObject) e.invokeMethod(removed, "__add__", e.fromJava(1));;
+                                        volume.setItem(volIdx, maskColor);
                                     }
-                                }
-                                if (consistent) {
-                                    break;
-                                }
 
-                                //Clear out voxel
-                                removed = (PyObject) e.invokeMethod(removed, "__add__", e.fromJava(1));;
-                                volume.setItem(volIdx, e.fromJava(maskColor));
+                                    //Update depth value
+                                    depth.setItem(e.newPyTuple(cursor.getItem(v), cursor.getItem(u)), cursor.getItem(d));
+                                }
                             }
-
-                            //Update depth value
-                            depth.setItem(e.newPyTuple(cursor.getItem(e.fromJava(v)), cursor.getItem(e.fromJava(u))), cursor.getItem(e.fromJava(d)));
+                        } catch (Exception ex) {
+                            break;
                         }
                     }
+                } catch (Exception ex) {
+                    break;
                 }
             }
             cond = (PyObject) (e.invokeMethod(removed, "__gt__", e.fromJava(0)));
