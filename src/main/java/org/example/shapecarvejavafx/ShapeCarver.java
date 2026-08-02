@@ -56,10 +56,10 @@ public class ShapeCarver {
         // 0 (z, y)
         // 1 (x, z)
         // 2 (y, x)
-        c.dims = e.newPyTuple(e.fromJava(views[2].length), e.fromJava(views[0][0].length), e.fromJava(views[0].length));
+        c.volumeDims = e.newPyTuple(e.fromJava(views[2].length), e.fromJava(views[0][0].length), e.fromJava(views[0].length));
         var intDType = (PyObject) e.eval("int");
         var npDotEmpty = (PyObject) e.eval("np.empty");
-        c.volume = npDotEmpty.call(c.dims, intDType);
+        c.volume = npDotEmpty.call(c.volumeDims, intDType);
 
         var maskColor = e.fromJava(0);
         var npViews = viewsToNumPy(e, viewsAsList);
@@ -133,7 +133,7 @@ public class ShapeCarver {
         }
     }
 
-    PyTuple dims; /* cuboid shape */
+    PyTuple volumeDims; /* cuboid shape */
     // Type: MArray{Tuple{S, S, S}, Int}
     PyObject volume;
 
@@ -162,35 +162,33 @@ public class ShapeCarver {
         var dIt = e.invokeMethod(e.invokeFunction("range", e.fromJava(3)), "__iter__");
         while (true) {
             try {
-                var d = (PyObject) e.invokeMethod(dIt, "__next__");
-                var u = (PyObject) e.invokeMethod((PyObject) e.invokeMethod(d, "__add__", e.fromJava(1)), "__mod__", e.fromJava(3)); // other axis 0
-                var v = (PyObject) e.invokeMethod((PyObject) e.invokeMethod(d, "__add__", e.fromJava(2)), "__mod__", e.fromJava(3)); // other axis 1
-                var sIdxIt = e.invokeMethod(e.invokeFunction("range", e.fromJava(2)), "__iter__");
+                var projAxis = (PyObject) e.invokeMethod(dIt, "__next__");
+                var u = (PyObject) e.invokeMethod((PyObject) e.invokeMethod(projAxis, "__add__", e.fromJava(1)), "__mod__", e.fromJava(3)); // other axis 0
+                var v = (PyObject) e.invokeMethod((PyObject) e.invokeMethod(projAxis, "__add__", e.fromJava(2)), "__mod__", e.fromJava(3)); // other axis 1
+                var sideIdxIt = e.invokeMethod(e.invokeFunction("range", e.fromJava(2)), "__iter__");
                 while (true) {
                     try {
-                        var sIdx = (PyObject) e.invokeMethod(sIdxIt, "__next__");
-                        var idxTuple = e.newPyTuple(d, sIdx);
+                        var sideIdx = (PyObject) e.invokeMethod(sideIdxIt, "__next__");
+                        var idxTuple = e.newPyTuple(projAxis, sideIdx);
                         var view = views.getItem(idxTuple);
-                        var sIdxIsOne = (PyObject) e.invokeMethod(sIdx, "__eq__", e.fromJava(1));
-                        var sIdxIsZero = (PyObject) e.invokeMethod(sIdx, "__eq__", e.fromJava(0));
-                        var s = (PyObject) (sIdxIsOne.isTrue() ? e.invokeMethod(dims.getItem(d), "__sub__", e.fromJava(1)) : e.fromJava(0));
-                        var sOp = (PyObject) (sIdxIsZero.isTrue() ? e.invokeMethod(dims.getItem(d), "__sub__", e.fromJava(1)) : e.fromJava(0));
+                        var isMinSide = (PyObject) e.invokeMethod(sideIdx, "__eq__", e.fromJava(0));
+                        var isMaxSide = (PyObject) e.invokeMethod(sideIdx, "__eq__", e.fromJava(1));
+                        var nearBoundary = (PyObject) (isMaxSide.isTrue() ? e.invokeMethod(volumeDims.getItem(projAxis), "__sub__", e.fromJava(1)) : e.fromJava(0));
+                        var farBoundary = (PyObject) (isMinSide.isTrue() ? e.invokeMethod(volumeDims.getItem(projAxis), "__sub__", e.fromJava(1)) : e.fromJava(0));
                         // TODO: Switch u and v here to match cursor semantics below
-                        var uIdxIt = e.invokeMethod(e.invokeFunction("range", dims.getItem(u)), "__iter__");
+                        var uIdxIt = e.invokeMethod(e.invokeFunction("range", volumeDims.getItem(u)), "__iter__");
                         while (true) {
                             try {
                                 var uIdx = (PyObject) e.invokeMethod(uIdxIt, "__next__");
-                                var vIdxIt = e.invokeMethod(e.invokeFunction("range", dims.getItem(v)), "__iter__");
+                                var vIdxIt = e.invokeMethod(e.invokeFunction("range", volumeDims.getItem(v)), "__iter__");
                                 while (true) {
                                     try {
                                         var vIdx = (PyObject) e.invokeMethod(vIdxIt, "__next__");
                                         var shouldSkip = skip.getItem(idxTuple);
-                                        var pixel = view.getItem(e.newPyTuple(uIdx, vIdx));
-                                        var pixelIsMaskColor = (PyObject) e.invokeMethod(pixel, "__eq__", maskColor);
-                                        // the ternary can always take the false branch
-                                        // and my test still succeeds :-(
-                                        depths.setItem(e.newPyTuple(d, sIdx, uIdx, vIdx),
-                                                shouldSkip.isFalse() && pixelIsMaskColor.isTrue() ? sOp : s);
+                                        var viewColor = view.getItem(e.newPyTuple(uIdx, vIdx));
+                                        var isMaskColor = (PyObject) e.invokeMethod(viewColor, "__eq__", maskColor);
+                                        depths.setItem(e.newPyTuple(projAxis, sideIdx, uIdx, vIdx),
+                                                shouldSkip.isFalse() && isMaskColor.isTrue() ? farBoundary : nearBoundary);
                                     } catch (Exception ex) {
                                         break;
                                     }
@@ -205,21 +203,22 @@ public class ShapeCarver {
                 }
 
                 //Clear out volume where ray goes through entirely
-                var cursorVIt = e.invokeMethod(e.invokeFunction("range", dims.getItem(v)), "__iter__");
+                var cursorVIt = e.invokeMethod(e.invokeFunction("range", volumeDims.getItem(v)), "__iter__");
                 while (true) {
                     try {
                         var cursorV = (PyObject) e.invokeMethod(cursorVIt, "__next__");
                         cursor.setItem(v, cursorV);
-                        var cursorUIt = e.invokeMethod(e.invokeFunction("range", dims.getItem(u)), "__iter__");
+                        var cursorUIt = e.invokeMethod(e.invokeFunction("range", volumeDims.getItem(u)), "__iter__");
                         while (true) {
                             try {
                                 var cursorU = (PyObject) e.invokeMethod(cursorUIt, "__next__");
                                 cursor.setItem(u, cursorU);
-                                var cursorDIt = e.invokeMethod(e.invokeFunction("range", depths.getItem(e.newPyTuple(d, e.fromJava(1), cursor.getItem(v), cursor.getItem(u))), e.invokeMethod(depths.getItem(e.newPyTuple(d, e.fromJava(0), cursor.getItem(v), cursor.getItem(u))), "__add__", e.fromJava(1))), "__iter__");
+                                var startDepth = depths.getItem(e.newPyTuple(projAxis, e.fromJava(1), cursor.getItem(v), cursor.getItem(u)));
+                                var cursorDIt = e.invokeMethod(e.invokeFunction("range", startDepth, e.invokeMethod(depths.getItem(e.newPyTuple(projAxis, e.fromJava(0), cursor.getItem(v), cursor.getItem(u))), "__add__", e.fromJava(1))), "__iter__");
                                 while (true) {
                                     try {
                                         var cursorD = (PyObject) e.invokeMethod(cursorDIt, "__next__");
-                                        cursor.setItem(d, cursorD);
+                                        cursor.setItem(projAxis, cursorD);
                                         var slice = (PyObject) e.eval("slice");
                                         var someList = cursor.getItem(slice.call(e.getNone(), e.getNone(), e.fromJava(-1)));
                                         volume.setItem(e.newPyTuple(someList.getItem(e.fromJava(0)), someList.getItem(e.fromJava(1)), someList.getItem(e.fromJava(2))), maskColor);
@@ -241,24 +240,24 @@ public class ShapeCarver {
         }
 
         //Perform iterative shape carving until convergence
-        var removed = e.fromJava(1);
-        var cond = (PyObject) (e.invokeMethod(removed, "__gt__", e.fromJava(0)));
+        var voxelsRemoved = e.fromJava(1);
+        var cond = (PyObject) (e.invokeMethod(voxelsRemoved, "__gt__", e.fromJava(0)));
         while (cond.isTrue()) {
-            removed = e.fromJava(0);
+            voxelsRemoved = e.fromJava(0);
             var dItNew = e.invokeMethod(e.invokeFunction("range", e.fromJava(3)), "__iter__");
             while (true) {
                 try {
-                    var d = (PyObject) e.invokeMethod(dItNew, "__next__");
-                    var u = (PyObject) e.invokeMethod((PyObject) e.invokeMethod(d, "__add__", e.fromJava(1)), "__mod__", e.fromJava(3)); // other axis 0
-                    var v = (PyObject) e.invokeMethod((PyObject) e.invokeMethod(d, "__add__", e.fromJava(2)), "__mod__", e.fromJava(3)); // other axis 1
+                    var projAxis = (PyObject) e.invokeMethod(dItNew, "__next__");
+                    var u = (PyObject) e.invokeMethod((PyObject) e.invokeMethod(projAxis, "__add__", e.fromJava(1)), "__mod__", e.fromJava(3)); // other axis 0
+                    var v = (PyObject) e.invokeMethod((PyObject) e.invokeMethod(projAxis, "__add__", e.fromJava(2)), "__mod__", e.fromJava(3)); // other axis 1
 
                     //Do front/back sweep
-                    var sIdxIt = e.invokeMethod(e.invokeFunction("range", e.fromJava(2)), "__iter__");
+                    var sideIdxIt = e.invokeMethod(e.invokeFunction("range", e.fromJava(2)), "__iter__");
                     while (true) {
                         try {
-                            var sIdx = (PyObject) e.invokeMethod(sIdxIt, "__next__");
-                            var s = e.invokeMethod(e.invokeMethod(sIdx, "__mul__", e.fromJava(-2)), "__add__", e.fromJava(1));
-                            var idxTuple = e.newPyTuple(d, sIdx);
+                            var sideIdx = (PyObject) e.invokeMethod(sideIdxIt, "__next__");
+                            var sweepDirection = e.invokeMethod(e.invokeMethod(sideIdx, "__mul__", e.fromJava(-2)), "__add__", e.fromJava(1));
+                            var idxTuple = e.newPyTuple(projAxis, sideIdx);
                             var skipThis = skip.getItem(idxTuple);
                             if (skipThis.isTrue()) {
                                 continue;
@@ -267,25 +266,25 @@ public class ShapeCarver {
                             var view = views.getItem(idxTuple);
                             var depth = depths.getItem(idxTuple);
 
-                            var cursorVIt = e.invokeMethod(e.invokeFunction("range", dims.getItem(v)), "__iter__");
+                            var cursorVIt = e.invokeMethod(e.invokeFunction("range", volumeDims.getItem(v)), "__iter__");
                             while (true) {
                                 try {
                                     var cursorV = (PyObject) e.invokeMethod(cursorVIt, "__next__");
                                     cursor.setItem(v, cursorV);
-                                    var cursorUIt = e.invokeMethod(e.invokeFunction("range", dims.getItem(u)), "__iter__");
+                                    var cursorUIt = e.invokeMethod(e.invokeFunction("range", volumeDims.getItem(u)), "__iter__");
                                     while (true) {
                                         try {
                                             var cursorU = (PyObject) e.invokeMethod(cursorUIt, "__next__");
                                             cursor.setItem(u, cursorU);
                                             //March along ray
                                             var start = depth.getItem(e.newPyTuple(cursor.getItem(v), cursor.getItem(u)));
-                                            var isFrontSweep = (PyObject) e.invokeMethod(s, "__eq__", e.fromJava(1));
-                                            var stop = isFrontSweep.isTrue() ? dims.getItem(d) : e.fromJava(-1);
-                                            var cursorDIt = e.invokeMethod(e.invokeFunction("range", start, stop, s), "__iter__");
+                                            var isForwardSweep = (PyObject) e.invokeMethod(sweepDirection, "__eq__", e.fromJava(1));
+                                            var stop = isForwardSweep.isTrue() ? volumeDims.getItem(projAxis) : e.fromJava(-1);
+                                            var cursorDIt = e.invokeMethod(e.invokeFunction("range", start, stop, sweepDirection), "__iter__");
                                             while (true) {
                                                 try {
                                                     var cursorD = (PyObject) e.invokeMethod(cursorDIt, "__next__");
-                                                    cursor.setItem(d, cursorD);
+                                                    cursor.setItem(projAxis, cursorD);
                                                    //Read volume color
                                                    var volIdx = e.newPyTuple(cursor.getItem(e.fromJava(2)), cursor.getItem(e.fromJava(1)), cursor.getItem(e.fromJava(0)));
                                                    var color = volume.getItem(volIdx);
@@ -297,31 +296,31 @@ public class ShapeCarver {
                                                    color = volume.getItem(volIdx);
 
                                                    //Check photo-consistency of volume at cursor
-                                                   var consistent = e.getTrue();
-                                                   var aIt = e.invokeMethod(e.invokeFunction("range", e.fromJava(3)), "__iter__");
+                                                   var isConsistent = e.getTrue();
+                                                   var checkAxisIt = e.invokeMethod(e.invokeFunction("range", e.fromJava(3)), "__iter__");
                                                    while (true) {
                                                        try {
-                                                           var a = (PyObject) e.invokeMethod(aIt, "__next__");
-                                                           var b = (PyObject) e.invokeMethod(e.invokeMethod(a, "__add__", e.fromJava(1)), "__mod__", e.fromJava(3));
-                                                           var c = (PyObject) e.invokeMethod(e.invokeMethod(a, "__add__", e.fromJava(2)), "__mod__", e.fromJava(3));
-                                                           var tIt = e.invokeMethod(e.invokeFunction("range", e.fromJava(2)), "__iter__");
+                                                           var checkAxis = (PyObject) e.invokeMethod(checkAxisIt, "__next__");
+                                                           var checkU = (PyObject) e.invokeMethod(e.invokeMethod(checkAxis, "__add__", e.fromJava(1)), "__mod__", e.fromJava(3));
+                                                           var checkV = (PyObject) e.invokeMethod(e.invokeMethod(checkAxis, "__add__", e.fromJava(2)), "__mod__", e.fromJava(3));
+                                                           var checkSideIt = e.invokeMethod(e.invokeFunction("range", e.fromJava(2)), "__iter__");
                                                            while (true) {
                                                                try {
-                                                                   var t = (PyObject) e.invokeMethod(tIt, "__next__");
-                                                                   idxTuple = e.newPyTuple(a, t);
+                                                                   var checkSide = (PyObject) e.invokeMethod(checkSideIt, "__next__");
+                                                                   idxTuple = e.newPyTuple(checkAxis, checkSide);
                                                                    var skipNewThis = skip.getItem(idxTuple);
                                                                    if (skipNewThis.isTrue()) {
                                                                        continue;
                                                                    }
-                                                                   var idxTupleInner = e.newPyTuple(a, t, cursor.getItem(c), cursor.getItem(b));
-                                                                   var fColor = views.getItem(idxTupleInner);
-                                                                   var fDepth = depths.getItem(idxTupleInner);
-                                                                   var tNonZero = (PyObject) e.invokeMethod(t, "__ne__", e.fromJava(0));
-                                                                   var isWhatever = tNonZero.isTrue() ? (PyObject) e.invokeMethod(fDepth, "__le__", cursor.getItem(a)) : (PyObject) e.invokeMethod(cursor.getItem(a), "__le__", fDepth);
-                                                                   if (isWhatever.isTrue()) {
-                                                                       var isColorDifferent = (PyObject) e.invokeMethod(fColor, "__ne__", color);
+                                                                   var idxTupleInner = e.newPyTuple(checkAxis, checkSide, cursor.getItem(checkV), cursor.getItem(checkU));
+                                                                   var checkViewColor = views.getItem(idxTupleInner);
+                                                                   var checkViewDepth = depths.getItem(idxTupleInner);
+                                                                   var isMaxSide = (PyObject) e.invokeMethod(checkSide, "__ne__", e.fromJava(0));
+                                                                   var isDepthOccluded = isMaxSide.isTrue() ? (PyObject) e.invokeMethod(checkViewDepth, "__le__", cursor.getItem(checkAxis)) : (PyObject) e.invokeMethod(cursor.getItem(checkAxis), "__le__", checkViewDepth);
+                                                                   if (isDepthOccluded.isTrue()) {
+                                                                       var isColorDifferent = (PyObject) e.invokeMethod(checkViewColor, "__ne__", color);
                                                                        if (isColorDifferent.isTrue()) {
-                                                                           consistent = e.getFalse();
+                                                                           isConsistent = e.getFalse();
                                                                            break;
                                                                        }
                                                                    }
@@ -329,26 +328,26 @@ public class ShapeCarver {
                                                                    break;
                                                                }
                                                            }
-                                                           if (consistent.isFalse()) {
+                                                           if (isConsistent.isFalse()) {
                                                                break;
                                                            }
                                                        } catch (Exception ex) {
                                                            break;
                                                        }
                                                    }
-                                                   if (consistent.isTrue()) {
+                                                   if (isConsistent.isTrue()) {
                                                        break;
                                                    }
 
                                                    //Clear out voxel
-                                                   removed = (PyObject) e.invokeMethod(removed, "__add__", e.fromJava(1));
+                                                   voxelsRemoved = (PyObject) e.invokeMethod(voxelsRemoved, "__add__", e.fromJava(1));
                                                    volume.setItem(volIdx, maskColor);
                                                 } catch (Exception ex) {
                                                     break;
                                                 }
                                             }
                                             //Update depth value
-                                            depth.setItem(e.newPyTuple(cursor.getItem(v), cursor.getItem(u)), cursor.getItem(d));
+                                            depth.setItem(e.newPyTuple(cursor.getItem(v), cursor.getItem(u)), cursor.getItem(projAxis));
                                         } catch (Exception ex) {
                                             break;
                                         }
@@ -365,7 +364,7 @@ public class ShapeCarver {
                     break;
                 }
             }
-            cond = (PyObject) (e.invokeMethod(removed, "__gt__", e.fromJava(0)));
+            cond = (PyObject) (e.invokeMethod(voxelsRemoved, "__gt__", e.fromJava(0)));
         }
 
         ////Do a final pass to fill in any missing colors
