@@ -134,10 +134,17 @@ public class ShapeCarver {
     }
 
     PyTuple dims; /* cuboid shape */
+    // Type: MArray{Tuple{S, S, S}, Int}
     PyObject volume;
 
     // note that JavaFX uses a y-down coordinate system, so the views are left, right, top, bottom, front, back
-    public PyObject carve(PythonScriptEngine e, PyObject views /* 2d images {x,y,z}-{front,back} */, final PyObject maskColor, PyObject skip /* views to skip, must have shape (3, 2) */) throws ScriptException, NoSuchMethodException {
+    public PyObject carve(
+            PythonScriptEngine e,
+            // Type: SArray{Tuple{3, 2, S, S}, Int}
+            PyObject views /* 2d images {x,y,z}-{front,back} */,
+            final PyObject maskColor,
+            // Type: SArray{Tuple{3, 2}, Bool}
+            PyObject skip /* views to skip */) throws ScriptException, NoSuchMethodException {
         Objects.requireNonNull(views);
         Objects.requireNonNull(skip);
 
@@ -147,7 +154,9 @@ public class ShapeCarver {
 
         var npDotEmpty = (PyObject) e.eval("np.empty");
         var intDType = (PyObject) e.eval("int");
+        // Type: MArray{Tuple{3, 2, S, S}, Int}
         var depths = npDotEmpty.call(views.getAttribute("shape"), intDType);
+        // Type: MVector{3, Int}
         var cursor = npDotEmpty.call(e.fromJava(3), intDType); // (z, y, x)
         //Initialize depth fields
         var dIt = e.invokeMethod(e.invokeFunction("range", e.fromJava(3)), "__iter__");
