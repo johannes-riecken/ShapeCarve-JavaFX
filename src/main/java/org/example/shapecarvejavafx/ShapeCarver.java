@@ -285,63 +285,63 @@ public class ShapeCarver {
                                                 try {
                                                     var cursorD = (PyObject) e.invokeMethod(cursorDIt, "__next__");
                                                     cursor.setItem(projAxis, cursorD);
-                                                   //Read volume color
-                                                   var volIdx = e.newPyTuple(cursor.getItem(e.fromJava(2)), cursor.getItem(e.fromJava(1)), cursor.getItem(e.fromJava(0)));
-                                                   var color = volume.getItem(volIdx);
-                                                   var isMaskColor = (PyObject) e.invokeMethod(color, "__eq__", maskColor);
-                                                   if (isMaskColor.isTrue()) {
-                                                       continue;
-                                                   }
-                                                   volume.setItem(volIdx, view.getItem(e.newPyTuple(cursor.getItem(v), cursor.getItem(u))));
-                                                   color = volume.getItem(volIdx);
+                                                    //Read volume color
+                                                    var volIdx = e.newPyTuple(cursor.getItem(e.fromJava(2)), cursor.getItem(e.fromJava(1)), cursor.getItem(e.fromJava(0)));
+                                                    var color = volume.getItem(volIdx);
+                                                    var isMaskColor = (PyObject) e.invokeMethod(color, "__eq__", maskColor);
+                                                    if (isMaskColor.isTrue()) {
+                                                        continue;
+                                                    }
+                                                    volume.setItem(volIdx, view.getItem(e.newPyTuple(cursor.getItem(v), cursor.getItem(u))));
+                                                    color = volume.getItem(volIdx);
 
-                                                   //Check photo-consistency of volume at cursor
-                                                   var isConsistent = e.getTrue();
-                                                   var checkAxisIt = e.invokeMethod(e.invokeFunction("range", e.fromJava(3)), "__iter__");
-                                                   while (true) {
-                                                       try {
-                                                           var checkAxis = (PyObject) e.invokeMethod(checkAxisIt, "__next__");
-                                                           var checkU = (PyObject) e.invokeMethod(e.invokeMethod(checkAxis, "__add__", e.fromJava(1)), "__mod__", e.fromJava(3));
-                                                           var checkV = (PyObject) e.invokeMethod(e.invokeMethod(checkAxis, "__add__", e.fromJava(2)), "__mod__", e.fromJava(3));
-                                                           var checkSideIt = e.invokeMethod(e.invokeFunction("range", e.fromJava(2)), "__iter__");
-                                                           while (true) {
-                                                               try {
-                                                                   var checkSide = (PyObject) e.invokeMethod(checkSideIt, "__next__");
-                                                                   idxTuple = e.newPyTuple(checkAxis, checkSide);
-                                                                   var skipNewThis = skip.getItem(idxTuple);
-                                                                   if (skipNewThis.isTrue()) {
-                                                                       continue;
-                                                                   }
-                                                                   var idxTupleInner = e.newPyTuple(checkAxis, checkSide, cursor.getItem(checkV), cursor.getItem(checkU));
-                                                                   var checkViewColor = views.getItem(idxTupleInner);
-                                                                   var checkViewDepth = depths.getItem(idxTupleInner);
-                                                                   var isMaxSide = (PyObject) e.invokeMethod(checkSide, "__ne__", e.fromJava(0));
-                                                                   var isDepthOccluded = isMaxSide.isTrue() ? (PyObject) e.invokeMethod(checkViewDepth, "__le__", cursor.getItem(checkAxis)) : (PyObject) e.invokeMethod(cursor.getItem(checkAxis), "__le__", checkViewDepth);
-                                                                   if (isDepthOccluded.isTrue()) {
-                                                                       var isColorDifferent = (PyObject) e.invokeMethod(checkViewColor, "__ne__", color);
-                                                                       if (isColorDifferent.isTrue()) {
-                                                                           isConsistent = e.getFalse();
-                                                                           break;
-                                                                       }
-                                                                   }
-                                                               } catch (Exception ex) {
-                                                                   break;
-                                                               }
-                                                           }
-                                                           if (isConsistent.isFalse()) {
-                                                               break;
-                                                           }
-                                                       } catch (Exception ex) {
-                                                           break;
-                                                       }
-                                                   }
-                                                   if (isConsistent.isTrue()) {
-                                                       break;
-                                                   }
+                                                    //Check photo-consistency of volume at cursor
+                                                    var isConsistent = e.getTrue();
+                                                    var checkAxisIt = e.invokeMethod(e.invokeFunction("range", e.fromJava(3)), "__iter__");
+                                                    while (true) {
+                                                        try {
+                                                            var checkAxis = (PyObject) e.invokeMethod(checkAxisIt, "__next__");
+                                                            var checkU = (PyObject) e.invokeMethod(e.invokeMethod(checkAxis, "__add__", e.fromJava(1)), "__mod__", e.fromJava(3));
+                                                            var checkV = (PyObject) e.invokeMethod(e.invokeMethod(checkAxis, "__add__", e.fromJava(2)), "__mod__", e.fromJava(3));
+                                                            var checkSideIt = e.invokeMethod(e.invokeFunction("range", e.fromJava(2)), "__iter__");
+                                                            while (true) {
+                                                                try {
+                                                                    var checkSide = (PyObject) e.invokeMethod(checkSideIt, "__next__");
+                                                                    idxTuple = e.newPyTuple(checkAxis, checkSide);
+                                                                    var skipNewThis = skip.getItem(idxTuple);
+                                                                    if (skipNewThis.isTrue()) {
+                                                                        continue;
+                                                                    }
+                                                                    var idxTupleInner = e.newPyTuple(checkAxis, checkSide, cursor.getItem(checkV), cursor.getItem(checkU));
+                                                                    var checkViewColor = views.getItem(idxTupleInner);
+                                                                    var checkViewDepth = depths.getItem(idxTupleInner);
+                                                                    var isMaxSide = (PyObject) e.invokeMethod(checkSide, "__ne__", e.fromJava(0));
+                                                                    var isDepthOccluded = isMaxSide.isTrue() ? (PyObject) e.invokeMethod(checkViewDepth, "__le__", cursor.getItem(checkAxis)) : (PyObject) e.invokeMethod(cursor.getItem(checkAxis), "__le__", checkViewDepth);
+                                                                    if (isDepthOccluded.isTrue()) {
+                                                                        var isColorDifferent = (PyObject) e.invokeMethod(checkViewColor, "__ne__", color);
+                                                                        if (isColorDifferent.isTrue()) {
+                                                                            isConsistent = e.getFalse();
+                                                                            break;
+                                                                        }
+                                                                    }
+                                                                } catch (Exception ex) {
+                                                                    break;
+                                                                }
+                                                            }
+                                                            if (isConsistent.isFalse()) {
+                                                                break;
+                                                            }
+                                                        } catch (Exception ex) {
+                                                            break;
+                                                        }
+                                                    }
+                                                    if (isConsistent.isTrue()) {
+                                                        break;
+                                                    }
 
-                                                   //Clear out voxel
-                                                   voxelsRemoved = (PyObject) e.invokeMethod(voxelsRemoved, "__add__", e.fromJava(1));
-                                                   volume.setItem(volIdx, maskColor);
+                                                    //Clear out voxel
+                                                    voxelsRemoved = (PyObject) e.invokeMethod(voxelsRemoved, "__add__", e.fromJava(1));
+                                                    volume.setItem(volIdx, maskColor);
                                                 } catch (Exception ex) {
                                                     break;
                                                 }
