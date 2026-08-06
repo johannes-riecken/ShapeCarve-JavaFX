@@ -1,3 +1,4 @@
+-- works with play.haskell.org
 {-# LANGUAGE MultilineStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wall #-}
@@ -332,6 +333,11 @@ javaStmts = many javaStmt
 rangeArgsToPython :: RangeArgs -> String
 rangeArgsToPython (MkRangeArgs{..}) = intercalate ", " . map exprToPython . catMaybes $ [start, Just stop, step]
 
+rangeArgsToJulia :: RangeArgs -> String
+rangeArgsToJulia (MkRangeArgs{..}) = intercalate ":" . map exprToJulia . catMaybes $
+    [maybe (Just (Num 0)) Just start, stop', step] where
+        stop' = Just $ InvokeMethod stop "__sub__" [Num 1]
+
 stmtToPython :: JavaStmt -> String
 stmtToPython (VarDecl _ (FunRef _)) = "" -- these are boilerplate that's only necessary for Detroit
 stmtToPython (VarDecl n expr) = exprToPython (Var n) <> " = " <> exprToPython expr
@@ -346,13 +352,65 @@ stmtToPython Continue = "continue"
 stmtToPython Break = "break"
 stmtToPython (ExprAsStmt e) = exprToPython e
 
+stmtToJulia :: JavaStmt -> String
+stmtToJulia (VarDecl _ (FunRef _)) = "" -- these are boilerplate that's only necessary for Detroit
+stmtToJulia (VarDecl n expr) = exprToJulia (Var n) <> " = " <> exprToJulia expr
+stmtToJulia (Assign n expr) = exprToJulia (Var n) <> " = " <> exprToJulia expr
+stmtToJulia (SetItem n x y) = exprToJulia (Var n) <> "[(" <> exprToJulia x <> ") + 1] = " <> exprToJulia y
+stmtToJulia (RangeFor loopVar rangeArgs stmts) = "for " <> exprToJulia loopVar <> " in " <> rangeArgsToJulia rangeArgs <> "\n" <> body <> "end" where
+    body = case stmts of
+        [] -> ""
+        (_:_) -> unlines . map (dropEnd 1 . unlines . map ("\t"<>) . lines . stmtToJulia) $ stmts
+stmtToJulia (While cond body) = "while " <> exprToJulia cond <> "\n" <> (unlines . map (dropEnd 1 . unlines . map ("\t" <>) . lines . stmtToJulia) $ body) <> "end"
+stmtToJulia (If cond body) = "if " <> exprToJulia cond <> "\n" <> (unlines . map (dropEnd 1 . unlines . map ("\t" <>) . lines . stmtToJulia) $ body) <> "end"
+stmtToJulia Continue = "continue"
+stmtToJulia Break = "break"
+stmtToJulia (ExprAsStmt e) = exprToJulia e
+
 stmtsToPython :: [JavaStmt] -> String
 stmtsToPython = unlines . map stmtToPython
+
+stmtsToJulia :: [JavaStmt] -> String
+stmtsToJulia = unlines . map stmtToJulia
 
 camelToSnake :: String -> String
 camelToSnake "" = ""
 camelToSnake (x : xs) | isUpper x = '_' : toLower x : camelToSnake xs
 camelToSnake (x : xs) = x : camelToSnake xs
+
+exprToJulia :: JavaExpr -> String
+exprToJulia (Num x) = show x
+exprToJulia None = "nothing"
+exprToJulia (FunRef n) = n
+exprToJulia (FunCall n xs) = nameToJulia n <> "(" <> exprsToJulia xs <> ")" where
+    nameToJulia :: String -> String
+    nameToJulia ('D':'o':'t':c:rest) = '.' : toLower c : nameToJulia rest
+    nameToJulia (c:rest)             = c : nameToJulia rest
+    nameToJulia []                   = []
+exprToJulia (Tuple xs) = "(" <> exprsToJulia xs <> ", )"
+exprToJulia (Var "intDType") = "int"
+exprToJulia (Var n) = camelToSnake n
+exprToJulia (GetItem n x) = exprToJulia (Var n) <> "[(" <> exprToJulia x <> ") + 1]"
+exprToJulia (InvokeMethod x n xs) = case n of
+    "__add__" -> "(" <> exprToJulia x <> " + " <> exprsToJulia xs <> ")"
+    "__mod__" -> "(" <> exprToJulia x <> " % " <> exprsToJulia xs <> ")"
+    "__sub__" -> "(" <> exprToJulia x <> " - " <> exprsToJulia xs <> ")"
+    "__mul__" -> "(" <> exprToJulia x <> " * " <> exprsToJulia xs <> ")"
+    "__eq__" -> "(" <> exprToJulia x <> " == " <> exprsToJulia xs <> ")"
+    "__ne__" -> "(" <> exprToJulia x <> " != " <> exprsToJulia xs <> ")"
+    "__le__" -> "(" <> exprToJulia x <> " <= " <> exprsToJulia xs <> ")"
+    "__lt__" -> "(" <> exprToJulia x <> " < " <> exprsToJulia xs <> ")"
+    "__gt__" -> "(" <> exprToJulia x <> " > " <> exprsToJulia xs <> ")"
+    _ -> exprToJulia x <> "." <> n <> "(" <> exprsToJulia xs <> ")"
+exprToJulia (InvokeFunction n xs) = n <> "(" <> exprsToJulia xs <> ")"
+exprToJulia (IsTrue x) = exprToJulia (Var x)
+exprToJulia (IsFalse x) = "!" <> exprToJulia (Var x)
+exprToJulia (Equals x y) = exprToJulia x <> " == " <> exprToJulia y
+exprToJulia (Ternary x y z) = exprToJulia x <> " ? " <> exprToJulia y <> " : " <> exprToJulia z
+exprToJulia (And x y) = exprToJulia x <> " && " <> exprToJulia y
+exprToJulia True' = "true"
+exprToJulia False' = "false"
+exprToJulia (GetAttribute n attr) = n <> "." <> attr
 
 exprToPython :: JavaExpr -> String
 exprToPython (Num x) = show x
@@ -391,6 +449,9 @@ exprToPython (GetAttribute n attr) = n <> "." <> attr
 exprsToPython :: [JavaExpr] -> String
 exprsToPython = intercalate ", " . map exprToPython
 
+exprsToJulia :: [JavaExpr] -> String
+exprsToJulia = intercalate ", " . map exprToJulia
+
 parseExpr :: String -> Either ParseError JavaExpr
 parseExpr str = parse (javaExpr <* eof) "" str
 
@@ -417,7 +478,7 @@ main = do
     let res = parse (javaStmts <* eof) "" str
     case res of
         Left err -> error $ show err
-        Right res' -> putStrLn . stmtsToPython $ res'
+        Right res' -> putStrLn . stmtsToJulia $ res'
     -- parseTestLog False (opExpr <* eof) "cond ? x : y"
 
 --     hspec $ do
