@@ -1,9 +1,9 @@
 -- works with play.haskell.org
 {-# LANGUAGE MultilineStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wall #-}
 import Data.Char (isUpper, toLower, toUpper)
-import Data.List (intercalate)
 import Data.List.Extra (dropEnd)
 import Data.Maybe (catMaybes, fromMaybe)
 import Text.Parsec
@@ -11,9 +11,15 @@ import Text.Parsec.Prim
 import Control.Monad.Combinators.Expr (Operator(..), makeExprParser)
 import qualified Text.Parsec.Token as P
 import Test.Hspec
+import Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
+
+instance Monad m => Stream Text m Char where
+    uncons = pure . T.uncons
 
 -- can't use haskellDef with parsec-free
-javaStyle :: Monad m => P.GenLanguageDef String st m
+javaStyle :: Monad m => P.GenLanguageDef Text st m
 javaStyle   = P.LanguageDef
                 { P.commentStart   = "/*"
                 , P.commentEnd     = "*/"
@@ -28,51 +34,51 @@ javaStyle   = P.LanguageDef
                 , P.caseSensitive  = False
                 }
 
-lexer :: Monad m => P.GenTokenParser String u m
+lexer :: Monad m => P.GenTokenParser Text u m
 lexer       = P.makeTokenParser javaStyle
 
-parens :: Monad m => ParsecT String u m a -> ParsecT String u m a
+parens :: Monad m => ParsecT Text u m a -> ParsecT Text u m a
 parens = P.parens lexer
 
-braces :: Monad m => ParsecT String u m a -> ParsecT String u m a
+braces :: Monad m => ParsecT Text u m a -> ParsecT Text u m a
 braces = P.braces lexer
 
-stringLiteral :: Monad m => ParsecT String u m String
-stringLiteral = P.stringLiteral lexer
+stringLiteral :: Monad m => ParsecT Text u m Text
+stringLiteral = T.pack <$> P.stringLiteral lexer
 
-reserved :: Monad m => String -> ParsecT String u m ()
-reserved = P.reserved lexer
+reserved :: Monad m => Text -> ParsecT Text u m ()
+reserved = P.reserved lexer . T.unpack
 
-reservedOp :: Monad m => String -> ParsecT String u m ()
-reservedOp = P.reservedOp lexer
+reservedOp :: Monad m => Text -> ParsecT Text u m ()
+reservedOp = P.reservedOp lexer . T.unpack
 
-symbol :: Monad m => String -> ParsecT String u m String
-symbol = P.symbol lexer
+symbol :: Monad m => Text -> ParsecT Text u m Text
+symbol = fmap T.pack . P.symbol lexer . T.unpack
 
-identifier :: Monad m => ParsecT String u m String
-identifier = P.identifier lexer
+identifier :: Monad m => ParsecT Text u m Text
+identifier = T.pack <$> P.identifier lexer
 
-integer :: Monad m => ParsecT String u m Integer
+integer :: Monad m => ParsecT Text u m Integer
 integer = P.integer lexer
 
 data JavaExpr =
     Num Int
     | None
-    | FunRef String
-    | FunCall String [JavaExpr]
+    | FunRef Text
+    | FunCall Text [JavaExpr]
     | Tuple [JavaExpr]
-    | Var String
-    | GetItem String JavaExpr
-    | InvokeMethod JavaExpr String [JavaExpr]
-    | InvokeFunction String [JavaExpr]
+    | Var Text
+    | GetItem Text JavaExpr
+    | InvokeMethod JavaExpr Text [JavaExpr]
+    | InvokeFunction Text [JavaExpr]
     | Ternary JavaExpr JavaExpr JavaExpr
     | And JavaExpr JavaExpr
-    | IsTrue String
-    | IsFalse String
+    | IsTrue Text
+    | IsFalse Text
     | Equals JavaExpr JavaExpr
     | True'
     | False'
-    | GetAttribute String String
+    | GetAttribute Text Text
     deriving (Eq, Ord, Show)
 
 data RangeArgs = MkRangeArgs { start :: Maybe JavaExpr, stop :: JavaExpr, step :: Maybe JavaExpr }
@@ -82,9 +88,9 @@ emptyRangeArgs :: RangeArgs
 emptyRangeArgs = MkRangeArgs { start = Nothing, stop = Num 0, step = Nothing }
 
 data JavaStmt =
-    VarDecl String JavaExpr
-    | Assign String JavaExpr
-    | SetItem String JavaExpr JavaExpr
+    VarDecl Text JavaExpr
+    | Assign Text JavaExpr
+    | SetItem Text JavaExpr JavaExpr
     | RangeFor JavaExpr RangeArgs [JavaStmt] -- loop_var, range_arg, body
     | While JavaExpr [JavaStmt] -- condition, body
     | Continue
@@ -93,71 +99,71 @@ data JavaStmt =
     | ExprAsStmt JavaExpr
     deriving (Eq, Ord, Show)
 
--- engineCall :: Monad m => ParsecT String u m JavaExpr
+-- engineCall :: Monad m => ParsecT Text u m JavaExpr
 -- engineCall = do
 --     reserved "e."
 --     num <|> none <|> funRef <|> tuple <|> invokeMethod <|> invokeFunction
 
 
 
-num :: Monad m => ParsecT String u m JavaExpr
+num :: Monad m => ParsecT Text u m JavaExpr
 num = (do
     x <- reserved "e.fromJava" *> parens integer
     pure $ Num . fromInteger $ x) <?> "num"
 
-none :: Monad m => ParsecT String u m JavaExpr
+none :: Monad m => ParsecT Text u m JavaExpr
 none = (reserved "e.getNone()" *> pure None) <?> "none"
 
-funCall :: Monad m => ParsecT String u m JavaExpr
+funCall :: Monad m => ParsecT Text u m JavaExpr
 funCall = (do
     x <- identifier
     reserved ".call"
     exprs <- parens (sepBy javaExpr (symbol ","))
     pure $ FunCall x exprs) <?> "funCall"
 
-isTrue :: Monad m => ParsecT String u m JavaExpr
+isTrue :: Monad m => ParsecT Text u m JavaExpr
 isTrue = (do
     x <- identifier
     reserved ".isTrue()"
     pure $ IsTrue x) <?> "isTrue"
 
-isFalse :: Monad m => ParsecT String u m JavaExpr
+isFalse :: Monad m => ParsecT Text u m JavaExpr
 isFalse = (do
     x <- identifier
     reserved ".isFalse()"
     pure $ IsFalse x) <?> "isFalse"
 
-equals :: Monad m => ParsecT String u m JavaExpr
+equals :: Monad m => ParsecT Text u m JavaExpr
 equals = (do
     x <- identifier
     reserved ".equals"
     y <- parens javaExpr
     pure $ Equals (Var x) y) <?> "equals"
 
-true' :: Monad m => ParsecT String u m JavaExpr
+true' :: Monad m => ParsecT Text u m JavaExpr
 true' = (do
     reserved "e.getTrue()"
     pure True') <?> "true"
 
-false' :: Monad m => ParsecT String u m JavaExpr
+false' :: Monad m => ParsecT Text u m JavaExpr
 false' = (do
     reserved "e.getFalse()"
     pure False') <?> "false"
 
-getAttribute :: Monad m => ParsecT String u m JavaExpr
+getAttribute :: Monad m => ParsecT Text u m JavaExpr
 getAttribute = (do
     n <- identifier
     reserved ".getAttribute"
     attr <- parens stringLiteral
     pure $ GetAttribute n attr) <?> "getAttribute"
 
-tuple :: Monad m => ParsecT String u m JavaExpr
+tuple :: Monad m => ParsecT Text u m JavaExpr
 tuple = (do
     reserved "e.newPyTuple"
     exprs <- parens (sepBy javaExpr (symbol ","))
     pure $ Tuple exprs) <?> "tuple"
 
-varOrGetItem :: Monad m => ParsecT String u m JavaExpr
+varOrGetItem :: Monad m => ParsecT Text u m JavaExpr
 varOrGetItem = (do
     x <- identifier
     rest <- optionMaybe getItem
@@ -165,43 +171,43 @@ varOrGetItem = (do
         Nothing -> pure (Var x)
         Just arg -> pure (GetItem x arg))) <?> "varOrGetItem" where
 
-    getItem :: Monad m => ParsecT String u m JavaExpr
+    getItem :: Monad m => ParsecT Text u m JavaExpr
     getItem = (do
         reserved ".getItem"
         arg <- parens javaExpr
         pure $ arg) <?> "getItem"
 
-table :: Monad m => [[Operator (ParsecT String u m) JavaExpr]]
+table :: Monad m => [[Operator (ParsecT Text u m) JavaExpr]]
 table = [
         [binaryL "==" Equals]
         , [binaryL "&&" And]
         , [ternary "?" ":" Ternary]
         ]
 
-ternary :: Monad m => String -> String -> (a -> a -> a -> a) -> Operator (ParsecT String u m) a
+ternary :: Monad m => Text -> Text -> (a -> a -> a -> a) -> Operator (ParsecT Text u m) a
 ternary name0 name1 fun = TernR ((fun <$ (reservedOp name1)) <$ reservedOp name0)
-binaryL :: Monad m => String -> (a -> a -> a) -> Operator (ParsecT String u m) a
+binaryL :: Monad m => Text -> (a -> a -> a) -> Operator (ParsecT Text u m) a
 binaryL  name fun = InfixL (do{ reservedOp name; pure fun })
 -- binaryN  name fun = InfixN (do{ reservedOp name; pure fun })
 -- binaryR  name fun = InfixR (do{ reservedOp name; pure fun })
 
 -- opExpr is a JavaExpr with operators
-opExpr :: Monad m => ParsecT String u m JavaExpr
+opExpr :: Monad m => ParsecT Text u m JavaExpr
 opExpr    = makeExprParser javaExpr table
 
-varDecl :: Monad m => ParsecT String u m JavaStmt
+varDecl :: Monad m => ParsecT Text u m JavaStmt
 varDecl = (do
     x <- reserved "var" *> identifier
     expr <- symbol "=" *> opExpr <* symbol ";"
     pure $ VarDecl x expr) <?> "varDecl"
 
-assign :: Monad m => ParsecT String u m JavaStmt
+assign :: Monad m => ParsecT Text u m JavaStmt
 assign = (do
     x <- identifier
     expr <- symbol "=" *> opExpr <* symbol ";"
     pure $ Assign x expr) <?> "assign"
 
-setItem :: Monad m => ParsecT String u m JavaStmt
+setItem :: Monad m => ParsecT Text u m JavaStmt
 setItem = (do
     x <- identifier
     reserved ".setItem"
@@ -209,25 +215,25 @@ setItem = (do
     reserved ";"
     pure $ SetItem x y z) <?> "setItem"
 
-continue :: Monad m => ParsecT String u m JavaStmt
+continue :: Monad m => ParsecT Text u m JavaStmt
 continue = (do
     reserved "continue"
     reserved ";"
     pure Continue) <?> "continue"
 
-break' :: Monad m => ParsecT String u m JavaStmt
+break' :: Monad m => ParsecT Text u m JavaStmt
 break' = (do
     reserved "break"
     reserved ";"
     pure Break) <?> "break"
 
-exprAsStmt :: Monad m => ParsecT String u m JavaStmt
+exprAsStmt :: Monad m => ParsecT Text u m JavaStmt
 exprAsStmt = (do
     e <- javaExpr
     reserved ";"
     pure $ ExprAsStmt e) <?> "exprAsStmt"
 
-rangeFor :: Monad m => ParsecT String u m JavaStmt
+rangeFor :: Monad m => ParsecT Text u m JavaStmt
 rangeFor = (do
     reserved "var"
     _ <- identifier
@@ -257,21 +263,21 @@ rangeFor = (do
                 _ -> error ("can't handle range args: " <> show rangeArgExprs)
     pure $ RangeFor loopVar'' rangeArgs body') <?> "rangeFor"
 
-while :: Monad m => ParsecT String u m JavaStmt
+while :: Monad m => ParsecT Text u m JavaStmt
 while = (do
     reserved "while"
     cond <- parens javaExpr
     body <- braces javaStmts
     pure $ While cond body) <?> "while"
 
-if' :: Monad m => ParsecT String u m JavaStmt
+if' :: Monad m => ParsecT Text u m JavaStmt
 if' = (do
     reserved "if"
     cond <- parens javaExpr
     body <- braces javaStmts
     pure $ If cond body) <?> "if"
 
-javaExpr :: Monad m => ParsecT String u m JavaExpr
+javaExpr :: Monad m => ParsecT Text u m JavaExpr
 javaExpr = do
     _ <- optional (reserved "(PyObject)")
     parens opExpr
@@ -288,16 +294,16 @@ javaExpr = do
         <|> tuple
         <|> varOrGetItem
 
-pyObjectSuffix :: Monad m => ParsecT String u m JavaExpr
+pyObjectSuffix :: Monad m => ParsecT Text u m JavaExpr
 pyObjectSuffix = parens pyObjectSuffix <|> funRef <|> invokeMethod <|> invokeFunction where
 
-    funRef :: Monad m => ParsecT String u m JavaExpr
+    funRef :: Monad m => ParsecT Text u m JavaExpr
     funRef = (do
         reserved "e.eval"
         x <- parens stringLiteral
         pure $ FunRef x) <?> "funRef"
 
-    invokeMethod :: Monad m => ParsecT String u m JavaExpr
+    invokeMethod :: Monad m => ParsecT Text u m JavaExpr
     invokeMethod = (do
         reserved "e.invokeMethod"
         parens $ do
@@ -307,7 +313,7 @@ pyObjectSuffix = parens pyObjectSuffix <|> funRef <|> invokeMethod <|> invokeFun
             args <- optionMaybe (symbol "," *> sepBy javaExpr (symbol ","))
             pure $ InvokeMethod rcv method (fromMaybe [] args)) <?> "invokeMethod"
 
-    invokeFunction :: Monad m => ParsecT String u m JavaExpr
+    invokeFunction :: Monad m => ParsecT Text u m JavaExpr
     invokeFunction = (do
         reserved "e.invokeFunction"
         parens $ do
@@ -315,7 +321,7 @@ pyObjectSuffix = parens pyObjectSuffix <|> funRef <|> invokeMethod <|> invokeFun
             args <- optionMaybe (symbol "," *> sepBy javaExpr (symbol ","))
             pure $ InvokeFunction function (fromMaybe [] args)) <?> "invokeFunction"
 
-javaStmt :: Monad m => ParsecT String u m JavaStmt
+javaStmt :: Monad m => ParsecT Text u m JavaStmt
 javaStmt =
     try rangeFor
     <|> varDecl
@@ -327,32 +333,32 @@ javaStmt =
     <|> break'
     <|> exprAsStmt
 
-javaStmts :: Monad m => ParsecT String u m [JavaStmt]
+javaStmts :: Monad m => ParsecT Text u m [JavaStmt]
 javaStmts = many javaStmt
 
-rangeArgsToPython :: RangeArgs -> String
-rangeArgsToPython (MkRangeArgs{..}) = intercalate ", " . map exprToPython . catMaybes $ [start, Just stop, step]
+rangeArgsToPython :: RangeArgs -> Text
+rangeArgsToPython (MkRangeArgs{..}) = T.intercalate ", " . map exprToPython . catMaybes $ [start, Just stop, step]
 
-rangeArgsToJulia :: RangeArgs -> String
-rangeArgsToJulia (MkRangeArgs{..}) = intercalate ":" . map exprToJulia . catMaybes $
+rangeArgsToJulia :: RangeArgs -> Text
+rangeArgsToJulia (MkRangeArgs{..}) = T.intercalate ":" . map exprToJulia . catMaybes $
     [maybe (Just (Num 0)) Just start, stop', step] where
         stop' = Just $ InvokeMethod stop "__sub__" [Num 1]
 
-stmtToPython :: JavaStmt -> String
+stmtToPython :: JavaStmt -> Text
 stmtToPython (VarDecl _ (FunRef _)) = "" -- these are boilerplate that's only necessary for Detroit
 stmtToPython (VarDecl n expr) = exprToPython (Var n) <> " = " <> exprToPython expr
 stmtToPython (Assign n expr) = exprToPython (Var n) <> " = " <> exprToPython expr
 stmtToPython (SetItem n x y) = exprToPython (Var n) <> "[" <> exprToPython x <> "] = " <> exprToPython y
 stmtToPython (RangeFor loopVar rangeArgs stmts) = "for " <> exprToPython loopVar <> " in range(" <> rangeArgsToPython rangeArgs <> "):\n" <> case stmts of
         [] -> "\tpass"
-        (_:_) -> dropEnd 1 . unlines . map (dropEnd 1 . unlines . map ("\t"<>) . lines . stmtToPython) $ stmts
-stmtToPython (While cond body) = "while " <> exprToPython cond <> ":\n" <> (dropEnd 1 . unlines . map (dropEnd 1 . unlines . map ("\t" <>) . lines . stmtToPython) $ body)
-stmtToPython (If cond body) = "if " <> exprToPython cond <> ":\n" <> (dropEnd 1 . unlines . map (dropEnd 1 . unlines . map ("\t" <>) . lines . stmtToPython) $ body)
+        (_:_) -> T.dropEnd 1 . T.unlines . map (T.dropEnd 1 . T.unlines . map ("\t"<>) . T.lines . stmtToPython) $ stmts
+stmtToPython (While cond body) = "while " <> exprToPython cond <> ":\n" <> (T.dropEnd 1 . T.unlines . map (T.dropEnd 1 . T.unlines . map ("\t" <>) . T.lines . stmtToPython) $ body)
+stmtToPython (If cond body) = "if " <> exprToPython cond <> ":\n" <> (T.dropEnd 1 . T.unlines . map (T.dropEnd 1 . T.unlines . map ("\t" <>) . T.lines . stmtToPython) $ body)
 stmtToPython Continue = "continue"
 stmtToPython Break = "break"
 stmtToPython (ExprAsStmt e) = exprToPython e
 
-stmtToJulia :: JavaStmt -> String
+stmtToJulia :: JavaStmt -> Text
 stmtToJulia (VarDecl _ (FunRef _)) = "" -- these are boilerplate that's only necessary for Detroit
 stmtToJulia (VarDecl n expr) = exprToJulia (Var n) <> " = " <> exprToJulia expr
 stmtToJulia (Assign n expr) = exprToJulia (Var n) <> " = " <> exprToJulia expr
@@ -360,33 +366,35 @@ stmtToJulia (SetItem n x y) = exprToJulia (Var n) <> "[(" <> exprToJulia x <> ")
 stmtToJulia (RangeFor loopVar rangeArgs stmts) = "for " <> exprToJulia loopVar <> " in " <> rangeArgsToJulia rangeArgs <> "\n" <> body <> "end" where
     body = case stmts of
         [] -> ""
-        (_:_) -> unlines . map (dropEnd 1 . unlines . map ("\t"<>) . lines . stmtToJulia) $ stmts
-stmtToJulia (While cond body) = "while " <> exprToJulia cond <> "\n" <> (unlines . map (dropEnd 1 . unlines . map ("\t" <>) . lines . stmtToJulia) $ body) <> "end"
-stmtToJulia (If cond body) = "if " <> exprToJulia cond <> "\n" <> (unlines . map (dropEnd 1 . unlines . map ("\t" <>) . lines . stmtToJulia) $ body) <> "end"
+        (_:_) -> T.unlines . map (T.dropEnd 1 . T.unlines . map ("\t"<>) . T.lines . stmtToJulia) $ stmts
+stmtToJulia (While cond body) = "while " <> exprToJulia cond <> "\n" <> (T.unlines . map (T.dropEnd 1 . T.unlines . map ("\t" <>) . T.lines . stmtToJulia) $ body) <> "end"
+stmtToJulia (If cond body) = "if " <> exprToJulia cond <> "\n" <> (T.unlines . map (T.dropEnd 1 . T.unlines . map ("\t" <>) . T.lines . stmtToJulia) $ body) <> "end"
 stmtToJulia Continue = "continue"
 stmtToJulia Break = "break"
 stmtToJulia (ExprAsStmt e) = exprToJulia e
 
-stmtsToPython :: [JavaStmt] -> String
-stmtsToPython = unlines . map stmtToPython
+stmtsToPython :: [JavaStmt] -> Text
+stmtsToPython = T.unlines . map stmtToPython
 
-stmtsToJulia :: [JavaStmt] -> String
-stmtsToJulia = unlines . map stmtToJulia
+stmtsToJulia :: [JavaStmt] -> Text
+stmtsToJulia = T.unlines . map stmtToJulia
 
-camelToSnake :: String -> String
-camelToSnake "" = ""
-camelToSnake (x : xs) | isUpper x = '_' : toLower x : camelToSnake xs
-camelToSnake (x : xs) = x : camelToSnake xs
+camelToSnake :: Text -> Text
+camelToSnake = T.pack . camelToSnake' . T.unpack where
+    camelToSnake' "" = ""
+    camelToSnake' (x : xs) | isUpper x = '_' : toLower x : camelToSnake' xs
+    camelToSnake' (x : xs) = x : camelToSnake' xs
 
-exprToJulia :: JavaExpr -> String
-exprToJulia (Num x) = show x
+exprToJulia :: JavaExpr -> Text
+exprToJulia (Num x) = T.show x
 exprToJulia None = "nothing"
 exprToJulia (FunRef n) = n
 exprToJulia (FunCall n xs) = nameToJulia n <> "(" <> exprsToJulia xs <> ")" where
-    nameToJulia :: String -> String
-    nameToJulia ('D':'o':'t':c:rest) = '.' : toLower c : nameToJulia rest
-    nameToJulia (c:rest)             = c : nameToJulia rest
-    nameToJulia []                   = []
+    nameToJulia :: Text -> Text
+    nameToJulia = T.pack . nameToJulia' . T.unpack where
+        nameToJulia' ('D':'o':'t':c:rest) = '.' : toLower c : nameToJulia' rest
+        nameToJulia' (c:rest)             = c : nameToJulia' rest
+        nameToJulia' []                   = []
 exprToJulia (Tuple xs) = "(" <> exprsToJulia xs <> ", )"
 exprToJulia (Var "intDType") = "int"
 exprToJulia (Var n) = camelToSnake n
@@ -412,15 +420,16 @@ exprToJulia True' = "true"
 exprToJulia False' = "false"
 exprToJulia (GetAttribute n attr) = n <> "." <> attr
 
-exprToPython :: JavaExpr -> String
-exprToPython (Num x) = show x
+exprToPython :: JavaExpr -> Text
+exprToPython (Num x) = T.show x
 exprToPython None = "None"
 exprToPython (FunRef n) = n
 exprToPython (FunCall n xs) = nameToPython n <> "(" <> exprsToPython xs <> ")" where
-    nameToPython :: String -> String
-    nameToPython ('D':'o':'t':c:rest) = '.' : toLower c : nameToPython rest
-    nameToPython (c:rest)             = c : nameToPython rest
-    nameToPython []                   = []
+    nameToPython :: Text -> Text
+    nameToPython = T.pack . nameToPython' . T.unpack where
+        nameToPython' ('D':'o':'t':c:rest) = '.' : toLower c : nameToPython' rest
+        nameToPython' (c:rest)             = c : nameToPython' rest
+        nameToPython' []                   = []
 exprToPython (Tuple xs) = "(" <> exprsToPython xs <> ", )"
 exprToPython (Var "intDType") = "int"
 exprToPython (Var n) = camelToSnake n
@@ -446,22 +455,22 @@ exprToPython True' = "True"
 exprToPython False' = "False"
 exprToPython (GetAttribute n attr) = n <> "." <> attr
 
-exprsToPython :: [JavaExpr] -> String
-exprsToPython = intercalate ", " . map exprToPython
+exprsToPython :: [JavaExpr] -> Text
+exprsToPython = T.intercalate ", " . map exprToPython
 
-exprsToJulia :: [JavaExpr] -> String
-exprsToJulia = intercalate ", " . map exprToJulia
+exprsToJulia :: [JavaExpr] -> Text
+exprsToJulia = T.intercalate ", " . map exprToJulia
 
-parseExpr :: String -> Either ParseError JavaExpr
+parseExpr :: Text -> Either ParseError JavaExpr
 parseExpr str = parse (javaExpr <* eof) "" str
 
-parseOpExpr :: String -> Either ParseError JavaExpr
+parseOpExpr :: Text -> Either ParseError JavaExpr
 parseOpExpr str = parse (opExpr <* eof) "" str
 
-parseStmt :: String -> Either ParseError JavaStmt
+parseStmt :: Text -> Either ParseError JavaStmt
 parseStmt str = parse (javaStmt <* eof) "" str
 
-parseStmts :: String -> Either ParseError [JavaStmt]
+parseStmts :: Text -> Either ParseError [JavaStmt]
 parseStmts str = parse (many javaStmt <* eof) "" str
 
 main :: IO ()
@@ -470,15 +479,15 @@ main = do
 --     str <- getContents
 --     let res = parse (rangeFor <* eof) "" str
 --     case res of
---         Left err -> error $ show err
+--         Left err -> error $ T.show err
 --         Right res' -> putStrLn . stmtToPython $ res'
 --     -- parseTestLog False (opExpr <* eof) "cond ? x : y"
 
-    str <- getContents
+    str <- TIO.getContents
     let res = parse (javaStmts <* eof) "" str
     case res of
         Left err -> error $ show err
-        Right res' -> putStrLn . stmtsToJulia $ res'
+        Right res' -> TIO.putStrLn . stmtsToPython $ res'
     -- parseTestLog False (opExpr <* eof) "cond ? x : y"
 
 --     hspec $ do
@@ -624,7 +633,7 @@ main = do
 -- --     --         stmts <- parse (javaStmts <* eof) "" str
 -- --     --         pure $ stmtsToPython stmts
 -- --     -- case out of
--- --     --     Left err -> error (show err)
+-- --     --     Left err -> error (T.show err)
 -- --     --     Right res -> putStrLn res
 -- --     -- parseTestLog False (javaExpr <* eof) str
 -- --     -- parseTest (javaExpr <* eof) str
