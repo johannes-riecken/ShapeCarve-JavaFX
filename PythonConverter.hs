@@ -4,8 +4,11 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -Wall #-}
 import Data.Char (isUpper, toLower, toUpper)
+import qualified Data.List as L
 import Data.List.Extra (dropEnd)
 import Data.Maybe (catMaybes, fromMaybe)
+import Data.Map (Map)
+import qualified Data.Map as M
 import Text.Parsec
 import Text.Parsec.Prim
 import Control.Monad.Combinators.Expr (Operator(..), makeExprParser)
@@ -339,7 +342,7 @@ javaStmts :: Monad m => ParsecT Text u m [JavaStmt]
 javaStmts = many javaStmt
 
 rangeArgsToPython :: RangeArgs -> Doc ann
-rangeArgsToPython (MkRangeArgs{..}) = hsep . punctuate "," . map exprToPython . catMaybes $ [start, Just stop, step]
+rangeArgsToPython (MkRangeArgs{..}) = hsep . punctuate "," . map (exprToPython 0) . catMaybes $ [start, Just stop, step]
 
 rangeArgsToJulia :: RangeArgs -> Text
 rangeArgsToJulia (MkRangeArgs{..}) = T.intercalate ":" . map (T.show . exprToJulia) . catMaybes $
@@ -348,20 +351,20 @@ rangeArgsToJulia (MkRangeArgs{..}) = T.intercalate ":" . map (T.show . exprToJul
 
 stmtToPython :: JavaStmt -> Doc ann
 stmtToPython (VarDecl _ (FunRef _)) = "" -- these are boilerplate that's only necessary for Detroit
-stmtToPython (VarDecl n expr) = exprToPython (Var n) <+> "=" <+> exprToPython expr
-stmtToPython (Assign n expr) = exprToPython (Var n) <+> "=" <+> exprToPython expr
-stmtToPython (SetItem n x y) = exprToPython (Var n) <> "[" <> exprToPython x <> "] = " <> exprToPython y
+stmtToPython (VarDecl n expr) = exprToPython 0 (Var n) <+> "=" <+> exprToPython 0 expr
+stmtToPython (Assign n expr) = exprToPython 0 (Var n) <+> "=" <+> exprToPython 0 expr
+stmtToPython (SetItem n x y) = exprToPython 0 (Var n) <> "[" <> exprToPython 0 x <> "] = " <> exprToPython 0 y
 stmtToPython (RangeFor loopVar rangeArgs stmts) = vsep [
-    "for " <> exprToPython loopVar <> " in range(" <> rangeArgsToPython rangeArgs <> "):",
+    "for " <> exprToPython 0 loopVar <> " in range(" <> rangeArgsToPython rangeArgs <> "):",
     indent 4 $ case stmts of
         [] -> "pass"
         (_:_) -> vsep . map stmtToPython $ stmts
     ]
-stmtToPython (While cond body) = "while " <> exprToPython cond <> ":\n" <> (indent 4 . vsep . map stmtToPython $ body)
-stmtToPython (If cond body) = "if " <> exprToPython cond <> ":\n" <> (indent 4 . vsep . map stmtToPython $ body)
+stmtToPython (While cond body) = "while " <> exprToPython 0 cond <> ":\n" <> (indent 4 . vsep . map stmtToPython $ body)
+stmtToPython (If cond body) = "if " <> exprToPython 0 cond <> ":\n" <> (indent 4 . vsep . map stmtToPython $ body)
 stmtToPython Continue = "continue"
 stmtToPython Break = "break"
-stmtToPython (ExprAsStmt e) = exprToPython e
+stmtToPython (ExprAsStmt e) = exprToPython 0 e
 
 stmtToJulia :: JavaStmt -> Doc ann
 stmtToJulia (VarDecl _ (FunRef _)) = "" -- these are boilerplate that's only necessary for Detroit
@@ -425,46 +428,75 @@ exprToJulia True' = "true"
 exprToJulia False' = "false"
 exprToJulia (GetAttribute n attr) = (pretty . T.unpack) n <> "." <> (pretty . T.unpack) attr
 
-exprToPython :: JavaExpr -> Doc ann
-exprToPython (Num x) = pretty x
-exprToPython None = "None"
-exprToPython (FunRef n) = pretty . T.unpack $ n
-exprToPython (FunCall n xs) = (pretty . T.unpack) (nameToPython n) <> PP.parens (exprsToPython xs) where
+type Precedence = Int
+exprToPython :: Precedence -> JavaExpr -> Doc ann
+exprToPython _ (Num x) = pretty x
+exprToPython _ None = "None"
+exprToPython _ (FunRef n) = pretty . T.unpack $ n
+exprToPython _ (FunCall n xs) = (pretty . T.unpack) (nameToPython n) <> PP.parens (exprsToPython 0 xs) where
     nameToPython :: Text -> Text
     nameToPython = T.pack . nameToPython' . T.unpack where
         nameToPython' ('D':'o':'t':c:rest) = '.' : toLower c : nameToPython' rest
         nameToPython' (c:rest)             = c : nameToPython' rest
         nameToPython' []                   = []
-exprToPython (Tuple xs) = "(" <> exprsToPython xs <> ", )"
-exprToPython (Var "intDType") = "int"
-exprToPython (Var n) = pretty . T.unpack $ camelToSnake n
-exprToPython (GetItem n x) = exprToPython (Var n) <> "[" <> exprToPython x <> "]"
-exprToPython (InvokeMethod x n xs) = case n of
-    "__add__" -> "(" <> exprToPython x <+> "+" <+> exprsToPython xs <> ")"
-    "__mod__" -> "(" <> exprToPython x <+> "%" <+> exprsToPython xs <> ")"
-    "__sub__" -> "(" <> exprToPython x <+> "-" <+> exprsToPython xs <> ")"
-    "__mul__" -> "(" <> exprToPython x <+> "*" <+> exprsToPython xs <> ")"
-    "__eq__" -> "(" <> exprToPython x <+> "==" <+> exprsToPython xs <> ")"
-    "__ne__" -> "(" <> exprToPython x <+> "!=" <+> exprsToPython xs <> ")"
-    "__le__" -> "(" <> exprToPython x <+> "<=" <+> exprsToPython xs <> ")"
-    "__lt__" -> "(" <> exprToPython x <+> "<" <+> exprsToPython xs <> ")"
-    "__gt__" -> "(" <> exprToPython x <+> ">" <+> exprsToPython xs <> ")"
-    _ -> exprToPython x <> "." <> (pretty . T.unpack) n <> PP.parens (exprsToPython xs)
-exprToPython (InvokeFunction n xs) = pretty (T.unpack n) <> PP.parens (exprsToPython xs)
-exprToPython (IsTrue x) = exprToPython (Var x)
-exprToPython (IsFalse x) = "not " <> exprToPython (Var x)
-exprToPython (Equals x y) = exprToPython x <> ".__eq__(" <> exprToPython y <> ")"
-exprToPython (Ternary x y z) = exprToPython y <+> "if" <+> exprToPython x <+> "else" <+> exprToPython z
-exprToPython (And x y) = exprToPython x <+> "and" <+> exprToPython y
-exprToPython True' = "True"
-exprToPython False' = "False"
-exprToPython (GetAttribute n attr) = (pretty . T.unpack) (n <> "." <> attr)
+exprToPython _ (Tuple xs) = "(" <> exprsToPython 0 xs <> ", )"
+exprToPython _ (Var "intDType") = "int"
+exprToPython _ (Var n) = pretty . T.unpack $ camelToSnake n
+exprToPython _ (GetItem n x) = exprToPython 0 (Var n) <> "[" <> exprToPython 0 x <> "]"
+exprToPython d (InvokeMethod x n xs) = case dunders M.!? n of
+    Just op -> 
+        let prec = pyPrec op in pparen (d > prec) $ exprToPython (prec + 1) x <+> (pretty . T.unpack) op <+> exprsToPython (prec + 1) xs
+    Nothing -> exprToPython 0 x <> "." <> (pretty . T.unpack) n <> PP.parens (exprsToPython 0 xs)
+  where
+    pparen True  = PP.parens
+    pparen False = id
+exprToPython d (InvokeFunction n xs) = pretty (T.unpack n) <> PP.parens (exprsToPython 0 xs)
+exprToPython _ (IsTrue x) = exprToPython 0 (Var x)
+exprToPython _ (IsFalse x) = "not " <> exprToPython 0 (Var x)
+exprToPython _ (Equals x y) = exprToPython 0 x <> ".__eq__(" <> exprToPython 0 y <> ")"
+exprToPython _ (Ternary x y z) = exprToPython 0 y <+> "if" <+> exprToPython 0 x <+> "else" <+> exprToPython 0 z
+exprToPython _ (And x y) = exprToPython 0 x <+> "and" <+> exprToPython 0 y
+exprToPython _ True' = "True"
+exprToPython _ False' = "False"
+exprToPython _ (GetAttribute n attr) = (pretty . T.unpack) (n <> "." <> attr)
 
-exprsToPython :: [JavaExpr] -> Doc ann
-exprsToPython = hsep . punctuate "," . map exprToPython
+exprsToPython :: Precedence -> [JavaExpr] -> Doc ann
+exprsToPython d = hsep . punctuate "," . map (exprToPython d)
 
 exprsToJulia :: [JavaExpr] -> Text
 exprsToJulia = T.intercalate ", " . map (T.show . exprToJulia)
+
+-- table of only the binary operators
+pythonTable :: [[Text]]
+pythonTable = [
+    ["**"]
+    , ["*", "@", "/", "//", "%"]
+    , ["+", "-"]
+    , ["<<", ">>"]
+    , ["&"]
+    , ["^"]
+    , ["|"]
+    , ["in", "not in", "is", "is not", "<", "<=", ">", ">=", "!=", "=="]
+    , ["and"]
+    , ["or"]
+    , [":="]
+    ]
+
+dunders :: Map Text Text
+dunders = M.fromList [
+    ("__add__", "+")
+    , ("__mod__", "%")
+    , ("__sub__", "-")
+    , ("__mul__", "*")
+    , ("__eq__", "==")
+    , ("__ne__", "!=")
+    , ("__le__", "<=")
+    , ("__lt__", "<")
+    , ("__gt__", ">")
+    ]
+
+pyPrec :: Text -> Int
+pyPrec x = length pythonTable - fromMaybe (error ("unknown operator: " <> T.unpack x)) (L.findIndex (x `elem`) pythonTable)
 
 parseExpr :: Text -> Either ParseError JavaExpr
 parseExpr str = parse (javaExpr <* eof) "" str
