@@ -14,6 +14,7 @@ import Test.Hspec
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
+import Prettyprinter hiding (braces, equals, parens)
 
 instance Monad m => Stream Text m Char where
     uncons = pure . T.uncons
@@ -336,24 +337,27 @@ javaStmt =
 javaStmts :: Monad m => ParsecT Text u m [JavaStmt]
 javaStmts = many javaStmt
 
-rangeArgsToPython :: RangeArgs -> Text
-rangeArgsToPython (MkRangeArgs{..}) = T.intercalate ", " . map exprToPython . catMaybes $ [start, Just stop, step]
+rangeArgsToPython :: RangeArgs -> Doc ann
+rangeArgsToPython (MkRangeArgs{..}) = hsep . punctuate "," . map exprToPython . catMaybes $ [start, Just stop, step]
 
 rangeArgsToJulia :: RangeArgs -> Text
 rangeArgsToJulia (MkRangeArgs{..}) = T.intercalate ":" . map exprToJulia . catMaybes $
     [maybe (Just (Num 0)) Just start, stop', step] where
         stop' = Just $ InvokeMethod stop "__sub__" [Num 1]
 
-stmtToPython :: JavaStmt -> Text
+stmtToPython :: JavaStmt -> Doc ann
 stmtToPython (VarDecl _ (FunRef _)) = "" -- these are boilerplate that's only necessary for Detroit
-stmtToPython (VarDecl n expr) = exprToPython (Var n) <> " = " <> exprToPython expr
+stmtToPython (VarDecl n expr) = exprToPython (Var n) <+> "=" <+> exprToPython expr
 stmtToPython (Assign n expr) = exprToPython (Var n) <> " = " <> exprToPython expr
 stmtToPython (SetItem n x y) = exprToPython (Var n) <> "[" <> exprToPython x <> "] = " <> exprToPython y
-stmtToPython (RangeFor loopVar rangeArgs stmts) = "for " <> exprToPython loopVar <> " in range(" <> rangeArgsToPython rangeArgs <> "):\n" <> case stmts of
-        [] -> "\tpass"
-        (_:_) -> T.dropEnd 1 . T.unlines . map (T.dropEnd 1 . T.unlines . map ("\t"<>) . T.lines . stmtToPython) $ stmts
-stmtToPython (While cond body) = "while " <> exprToPython cond <> ":\n" <> (T.dropEnd 1 . T.unlines . map (T.dropEnd 1 . T.unlines . map ("\t" <>) . T.lines . stmtToPython) $ body)
-stmtToPython (If cond body) = "if " <> exprToPython cond <> ":\n" <> (T.dropEnd 1 . T.unlines . map (T.dropEnd 1 . T.unlines . map ("\t" <>) . T.lines . stmtToPython) $ body)
+stmtToPython (RangeFor loopVar rangeArgs stmts) = vsep [
+    "for " <> exprToPython loopVar <> " in range(" <> rangeArgsToPython rangeArgs <> "):",
+    indent 4 $ case stmts of
+        [] -> "pass"
+        (_:_) -> vsep . map stmtToPython $ stmts
+    ]
+stmtToPython (While cond body) = "while " <> exprToPython cond <> ":\n" <> (indent 4 . vsep . map stmtToPython $ body)
+stmtToPython (If cond body) = "if " <> exprToPython cond <> ":\n" <> (indent 4 . vsep . map stmtToPython $ body)
 stmtToPython Continue = "continue"
 stmtToPython Break = "break"
 stmtToPython (ExprAsStmt e) = exprToPython e
@@ -373,8 +377,8 @@ stmtToJulia Continue = "continue"
 stmtToJulia Break = "break"
 stmtToJulia (ExprAsStmt e) = exprToJulia e
 
-stmtsToPython :: [JavaStmt] -> Text
-stmtsToPython = T.unlines . map stmtToPython
+stmtsToPython :: [JavaStmt] -> Doc ann
+stmtsToPython = vsep . map stmtToPython
 
 stmtsToJulia :: [JavaStmt] -> Text
 stmtsToJulia = T.unlines . map stmtToJulia
@@ -420,11 +424,11 @@ exprToJulia True' = "true"
 exprToJulia False' = "false"
 exprToJulia (GetAttribute n attr) = n <> "." <> attr
 
-exprToPython :: JavaExpr -> Text
-exprToPython (Num x) = T.show x
+exprToPython :: JavaExpr -> Doc ann
+exprToPython (Num x) = pretty x
 exprToPython None = "None"
-exprToPython (FunRef n) = n
-exprToPython (FunCall n xs) = nameToPython n <> "(" <> exprsToPython xs <> ")" where
+exprToPython (FunRef n) = pretty . T.unpack $ n
+exprToPython (FunCall n xs) = (pretty . T.unpack) (nameToPython n) <> "(" <> exprsToPython xs <> ")" where
     nameToPython :: Text -> Text
     nameToPython = T.pack . nameToPython' . T.unpack where
         nameToPython' ('D':'o':'t':c:rest) = '.' : toLower c : nameToPython' rest
@@ -432,7 +436,7 @@ exprToPython (FunCall n xs) = nameToPython n <> "(" <> exprsToPython xs <> ")" w
         nameToPython' []                   = []
 exprToPython (Tuple xs) = "(" <> exprsToPython xs <> ", )"
 exprToPython (Var "intDType") = "int"
-exprToPython (Var n) = camelToSnake n
+exprToPython (Var n) = pretty . T.unpack $ camelToSnake n
 exprToPython (GetItem n x) = exprToPython (Var n) <> "[" <> exprToPython x <> "]"
 exprToPython (InvokeMethod x n xs) = case n of
     "__add__" -> "(" <> exprToPython x <> " + " <> exprsToPython xs <> ")"
@@ -444,8 +448,8 @@ exprToPython (InvokeMethod x n xs) = case n of
     "__le__" -> "(" <> exprToPython x <> " <= " <> exprsToPython xs <> ")"
     "__lt__" -> "(" <> exprToPython x <> " < " <> exprsToPython xs <> ")"
     "__gt__" -> "(" <> exprToPython x <> " > " <> exprsToPython xs <> ")"
-    _ -> exprToPython x <> "." <> n <> "(" <> exprsToPython xs <> ")"
-exprToPython (InvokeFunction n xs) = n <> "(" <> exprsToPython xs <> ")"
+    _ -> exprToPython x <> "." <> (pretty . T.unpack) n <> "(" <> exprsToPython xs <> ")"
+exprToPython (InvokeFunction n xs) = pretty (T.unpack n) <> "(" <> exprsToPython xs <> ")"
 exprToPython (IsTrue x) = exprToPython (Var x)
 exprToPython (IsFalse x) = "not " <> exprToPython (Var x)
 exprToPython (Equals x y) = exprToPython x <> ".__eq__(" <> exprToPython y <> ")"
@@ -453,10 +457,10 @@ exprToPython (Ternary x y z) = exprToPython y <> " if " <> exprToPython x <> " e
 exprToPython (And x y) = exprToPython x <> " and " <> exprToPython y
 exprToPython True' = "True"
 exprToPython False' = "False"
-exprToPython (GetAttribute n attr) = n <> "." <> attr
+exprToPython (GetAttribute n attr) = (pretty . T.unpack) (n <> "." <> attr)
 
-exprsToPython :: [JavaExpr] -> Text
-exprsToPython = T.intercalate ", " . map exprToPython
+exprsToPython :: [JavaExpr] -> Doc ann
+exprsToPython = hsep . punctuate "," . map exprToPython
 
 exprsToJulia :: [JavaExpr] -> Text
 exprsToJulia = T.intercalate ", " . map exprToJulia
@@ -487,7 +491,7 @@ main = do
     let res = parse (javaStmts <* eof) "" str
     case res of
         Left err -> error $ show err
-        Right res' -> TIO.putStrLn . stmtsToPython $ res'
+        Right res' -> print . stmtsToPython $ res'
     -- parseTestLog False (opExpr <* eof) "cond ? x : y"
 
 --     hspec $ do
