@@ -15,6 +15,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import Prettyprinter hiding (braces, equals, parens)
+import qualified Prettyprinter as PP
 
 instance Monad m => Stream Text m Char where
     uncons = pure . T.uncons
@@ -341,14 +342,14 @@ rangeArgsToPython :: RangeArgs -> Doc ann
 rangeArgsToPython (MkRangeArgs{..}) = hsep . punctuate "," . map exprToPython . catMaybes $ [start, Just stop, step]
 
 rangeArgsToJulia :: RangeArgs -> Text
-rangeArgsToJulia (MkRangeArgs{..}) = T.intercalate ":" . map exprToJulia . catMaybes $
+rangeArgsToJulia (MkRangeArgs{..}) = T.intercalate ":" . map (T.show . exprToJulia) . catMaybes $
     [maybe (Just (Num 0)) Just start, stop', step] where
         stop' = Just $ InvokeMethod stop "__sub__" [Num 1]
 
 stmtToPython :: JavaStmt -> Doc ann
 stmtToPython (VarDecl _ (FunRef _)) = "" -- these are boilerplate that's only necessary for Detroit
 stmtToPython (VarDecl n expr) = exprToPython (Var n) <+> "=" <+> exprToPython expr
-stmtToPython (Assign n expr) = exprToPython (Var n) <> " = " <> exprToPython expr
+stmtToPython (Assign n expr) = exprToPython (Var n) <+> "=" <+> exprToPython expr
 stmtToPython (SetItem n x y) = exprToPython (Var n) <> "[" <> exprToPython x <> "] = " <> exprToPython y
 stmtToPython (RangeFor loopVar rangeArgs stmts) = vsep [
     "for " <> exprToPython loopVar <> " in range(" <> rangeArgsToPython rangeArgs <> "):",
@@ -362,17 +363,17 @@ stmtToPython Continue = "continue"
 stmtToPython Break = "break"
 stmtToPython (ExprAsStmt e) = exprToPython e
 
-stmtToJulia :: JavaStmt -> Text
+stmtToJulia :: JavaStmt -> Doc ann
 stmtToJulia (VarDecl _ (FunRef _)) = "" -- these are boilerplate that's only necessary for Detroit
 stmtToJulia (VarDecl n expr) = exprToJulia (Var n) <> " = " <> exprToJulia expr
 stmtToJulia (Assign n expr) = exprToJulia (Var n) <> " = " <> exprToJulia expr
 stmtToJulia (SetItem n x y) = exprToJulia (Var n) <> "[(" <> exprToJulia x <> ") + 1] = " <> exprToJulia y
-stmtToJulia (RangeFor loopVar rangeArgs stmts) = "for " <> exprToJulia loopVar <> " in " <> rangeArgsToJulia rangeArgs <> "\n" <> body <> "end" where
+stmtToJulia (RangeFor loopVar rangeArgs stmts) = "for " <> exprToJulia loopVar <> " in " <> (pretty . T.unpack) (rangeArgsToJulia rangeArgs) <> "\n" <> body <> "end" where
     body = case stmts of
         [] -> ""
-        (_:_) -> T.unlines . map (T.dropEnd 1 . T.unlines . map ("\t"<>) . T.lines . stmtToJulia) $ stmts
-stmtToJulia (While cond body) = "while " <> exprToJulia cond <> "\n" <> (T.unlines . map (T.dropEnd 1 . T.unlines . map ("\t" <>) . T.lines . stmtToJulia) $ body) <> "end"
-stmtToJulia (If cond body) = "if " <> exprToJulia cond <> "\n" <> (T.unlines . map (T.dropEnd 1 . T.unlines . map ("\t" <>) . T.lines . stmtToJulia) $ body) <> "end"
+        (_:_) -> vsep . map stmtToJulia $ stmts
+stmtToJulia (While cond body) = "while " <> exprToJulia cond <> "\n" <> (indent 4 . vsep . map stmtToJulia) body <> "end"
+stmtToJulia (If cond body) = "if " <> exprToJulia cond <> "\n" <> (indent 4 . vsep . map stmtToJulia) body <> "end"
 stmtToJulia Continue = "continue"
 stmtToJulia Break = "break"
 stmtToJulia (ExprAsStmt e) = exprToJulia e
@@ -380,8 +381,8 @@ stmtToJulia (ExprAsStmt e) = exprToJulia e
 stmtsToPython :: [JavaStmt] -> Doc ann
 stmtsToPython = vsep . map stmtToPython
 
-stmtsToJulia :: [JavaStmt] -> Text
-stmtsToJulia = T.unlines . map stmtToJulia
+stmtsToJulia :: [JavaStmt] -> Doc ann
+stmtsToJulia = vsep . map stmtToJulia
 
 camelToSnake :: Text -> Text
 camelToSnake = T.pack . camelToSnake' . T.unpack where
@@ -389,32 +390,32 @@ camelToSnake = T.pack . camelToSnake' . T.unpack where
     camelToSnake' (x : xs) | isUpper x = '_' : toLower x : camelToSnake' xs
     camelToSnake' (x : xs) = x : camelToSnake' xs
 
-exprToJulia :: JavaExpr -> Text
-exprToJulia (Num x) = T.show x
+exprToJulia :: JavaExpr -> Doc ann
+exprToJulia (Num x) = pretty x
 exprToJulia None = "nothing"
-exprToJulia (FunRef n) = n
-exprToJulia (FunCall n xs) = nameToJulia n <> "(" <> exprsToJulia xs <> ")" where
+exprToJulia (FunRef n) = (pretty . T.unpack) n
+exprToJulia (FunCall n xs) = (pretty . T.unpack . nameToJulia) n <> "(" <> (pretty . T.unpack . exprsToJulia) xs <> ")" where
     nameToJulia :: Text -> Text
     nameToJulia = T.pack . nameToJulia' . T.unpack where
         nameToJulia' ('D':'o':'t':c:rest) = '.' : toLower c : nameToJulia' rest
         nameToJulia' (c:rest)             = c : nameToJulia' rest
         nameToJulia' []                   = []
-exprToJulia (Tuple xs) = "(" <> exprsToJulia xs <> ", )"
+exprToJulia (Tuple xs) = "(" <> (pretty . T.unpack . exprsToJulia) xs <> ", )"
 exprToJulia (Var "intDType") = "int"
-exprToJulia (Var n) = camelToSnake n
+exprToJulia (Var n) = (pretty . T.unpack . camelToSnake) n
 exprToJulia (GetItem n x) = exprToJulia (Var n) <> "[(" <> exprToJulia x <> ") + 1]"
 exprToJulia (InvokeMethod x n xs) = case n of
-    "__add__" -> "(" <> exprToJulia x <> " + " <> exprsToJulia xs <> ")"
-    "__mod__" -> "(" <> exprToJulia x <> " % " <> exprsToJulia xs <> ")"
-    "__sub__" -> "(" <> exprToJulia x <> " - " <> exprsToJulia xs <> ")"
-    "__mul__" -> "(" <> exprToJulia x <> " * " <> exprsToJulia xs <> ")"
-    "__eq__" -> "(" <> exprToJulia x <> " == " <> exprsToJulia xs <> ")"
-    "__ne__" -> "(" <> exprToJulia x <> " != " <> exprsToJulia xs <> ")"
-    "__le__" -> "(" <> exprToJulia x <> " <= " <> exprsToJulia xs <> ")"
-    "__lt__" -> "(" <> exprToJulia x <> " < " <> exprsToJulia xs <> ")"
-    "__gt__" -> "(" <> exprToJulia x <> " > " <> exprsToJulia xs <> ")"
-    _ -> exprToJulia x <> "." <> n <> "(" <> exprsToJulia xs <> ")"
-exprToJulia (InvokeFunction n xs) = n <> "(" <> exprsToJulia xs <> ")"
+    "__add__" -> "(" <> exprToJulia x <> " + " <> (pretty . T.unpack . exprsToJulia) xs <> ")"
+    "__mod__" -> "(" <> exprToJulia x <> " % " <> (pretty . T.unpack . exprsToJulia) xs <> ")"
+    "__sub__" -> "(" <> exprToJulia x <> " - " <> (pretty . T.unpack . exprsToJulia) xs <> ")"
+    "__mul__" -> "(" <> exprToJulia x <> " * " <> (pretty . T.unpack . exprsToJulia) xs <> ")"
+    "__eq__" -> "(" <> exprToJulia x <> " == " <> (pretty . T.unpack . exprsToJulia) xs <> ")"
+    "__ne__" -> "(" <> exprToJulia x <> " != " <> (pretty . T.unpack . exprsToJulia) xs <> ")"
+    "__le__" -> "(" <> exprToJulia x <> " <= " <> (pretty . T.unpack . exprsToJulia) xs <> ")"
+    "__lt__" -> "(" <> exprToJulia x <> " < " <> (pretty . T.unpack . exprsToJulia) xs <> ")"
+    "__gt__" -> "(" <> exprToJulia x <> " > " <> (pretty . T.unpack . exprsToJulia) xs <> ")"
+    _ -> exprToJulia x <> "." <> (pretty . T.unpack) n <> "(" <> (pretty . T.unpack . exprsToJulia) xs <> ")"
+exprToJulia (InvokeFunction n xs) = (pretty . T.unpack) n <> "(" <> (pretty . T.unpack . exprsToJulia) xs <> ")"
 exprToJulia (IsTrue x) = exprToJulia (Var x)
 exprToJulia (IsFalse x) = "!" <> exprToJulia (Var x)
 exprToJulia (Equals x y) = exprToJulia x <> " == " <> exprToJulia y
@@ -422,13 +423,13 @@ exprToJulia (Ternary x y z) = exprToJulia x <> " ? " <> exprToJulia y <> " : " <
 exprToJulia (And x y) = exprToJulia x <> " && " <> exprToJulia y
 exprToJulia True' = "true"
 exprToJulia False' = "false"
-exprToJulia (GetAttribute n attr) = n <> "." <> attr
+exprToJulia (GetAttribute n attr) = (pretty . T.unpack) n <> "." <> (pretty . T.unpack) attr
 
 exprToPython :: JavaExpr -> Doc ann
 exprToPython (Num x) = pretty x
 exprToPython None = "None"
 exprToPython (FunRef n) = pretty . T.unpack $ n
-exprToPython (FunCall n xs) = (pretty . T.unpack) (nameToPython n) <> "(" <> exprsToPython xs <> ")" where
+exprToPython (FunCall n xs) = (pretty . T.unpack) (nameToPython n) <> PP.parens (exprsToPython xs) where
     nameToPython :: Text -> Text
     nameToPython = T.pack . nameToPython' . T.unpack where
         nameToPython' ('D':'o':'t':c:rest) = '.' : toLower c : nameToPython' rest
@@ -439,22 +440,22 @@ exprToPython (Var "intDType") = "int"
 exprToPython (Var n) = pretty . T.unpack $ camelToSnake n
 exprToPython (GetItem n x) = exprToPython (Var n) <> "[" <> exprToPython x <> "]"
 exprToPython (InvokeMethod x n xs) = case n of
-    "__add__" -> "(" <> exprToPython x <> " + " <> exprsToPython xs <> ")"
-    "__mod__" -> "(" <> exprToPython x <> " % " <> exprsToPython xs <> ")"
-    "__sub__" -> "(" <> exprToPython x <> " - " <> exprsToPython xs <> ")"
-    "__mul__" -> "(" <> exprToPython x <> " * " <> exprsToPython xs <> ")"
-    "__eq__" -> "(" <> exprToPython x <> " == " <> exprsToPython xs <> ")"
-    "__ne__" -> "(" <> exprToPython x <> " != " <> exprsToPython xs <> ")"
-    "__le__" -> "(" <> exprToPython x <> " <= " <> exprsToPython xs <> ")"
-    "__lt__" -> "(" <> exprToPython x <> " < " <> exprsToPython xs <> ")"
-    "__gt__" -> "(" <> exprToPython x <> " > " <> exprsToPython xs <> ")"
-    _ -> exprToPython x <> "." <> (pretty . T.unpack) n <> "(" <> exprsToPython xs <> ")"
-exprToPython (InvokeFunction n xs) = pretty (T.unpack n) <> "(" <> exprsToPython xs <> ")"
+    "__add__" -> "(" <> exprToPython x <+> "+" <+> exprsToPython xs <> ")"
+    "__mod__" -> "(" <> exprToPython x <+> "%" <+> exprsToPython xs <> ")"
+    "__sub__" -> "(" <> exprToPython x <+> "-" <+> exprsToPython xs <> ")"
+    "__mul__" -> "(" <> exprToPython x <+> "*" <+> exprsToPython xs <> ")"
+    "__eq__" -> "(" <> exprToPython x <+> "==" <+> exprsToPython xs <> ")"
+    "__ne__" -> "(" <> exprToPython x <+> "!=" <+> exprsToPython xs <> ")"
+    "__le__" -> "(" <> exprToPython x <+> "<=" <+> exprsToPython xs <> ")"
+    "__lt__" -> "(" <> exprToPython x <+> "<" <+> exprsToPython xs <> ")"
+    "__gt__" -> "(" <> exprToPython x <+> ">" <+> exprsToPython xs <> ")"
+    _ -> exprToPython x <> "." <> (pretty . T.unpack) n <> PP.parens (exprsToPython xs)
+exprToPython (InvokeFunction n xs) = pretty (T.unpack n) <> PP.parens (exprsToPython xs)
 exprToPython (IsTrue x) = exprToPython (Var x)
 exprToPython (IsFalse x) = "not " <> exprToPython (Var x)
 exprToPython (Equals x y) = exprToPython x <> ".__eq__(" <> exprToPython y <> ")"
-exprToPython (Ternary x y z) = exprToPython y <> " if " <> exprToPython x <> " else " <> exprToPython z
-exprToPython (And x y) = exprToPython x <> " and " <> exprToPython y
+exprToPython (Ternary x y z) = exprToPython y <+> "if" <+> exprToPython x <+> "else" <+> exprToPython z
+exprToPython (And x y) = exprToPython x <+> "and" <+> exprToPython y
 exprToPython True' = "True"
 exprToPython False' = "False"
 exprToPython (GetAttribute n attr) = (pretty . T.unpack) (n <> "." <> attr)
@@ -463,7 +464,7 @@ exprsToPython :: [JavaExpr] -> Doc ann
 exprsToPython = hsep . punctuate "," . map exprToPython
 
 exprsToJulia :: [JavaExpr] -> Text
-exprsToJulia = T.intercalate ", " . map exprToJulia
+exprsToJulia = T.intercalate ", " . map (T.show . exprToJulia)
 
 parseExpr :: Text -> Either ParseError JavaExpr
 parseExpr str = parse (javaExpr <* eof) "" str
