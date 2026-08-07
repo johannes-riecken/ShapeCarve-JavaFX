@@ -561,76 +561,76 @@ main = do
 
 --         describe "Python conversion" $ do
 --             it "converts num" $ do
---                 exprToPython (Num 42) `shouldBe` "42"
+--                 (show . exprToPython) (Num 42) `shouldBe` "42"
 --             it "converts none" $ do
---                 exprToPython (None) `shouldBe` "None"
+--                 (show . exprToPython) (None) `shouldBe` "None"
 --             it "converts funRef" $ do
---                 exprToPython (FunRef "np.empty") `shouldBe` "np.empty"
+--                 (show . exprToPython) (FunRef "np.empty") `shouldBe` "np.empty"
 --             it "converts funCall" $ do
---                 exprToPython (FunCall "npDotEmpty" [Num 3]) `shouldBe` "np.empty(3)"
+--                 (show . exprToPython) (FunCall "npDotEmpty" [Num 3]) `shouldBe` "np.empty(3)"
 --             it "converts tuple" $ do
---                 exprToPython (Tuple [Num 1, Num 2]) `shouldBe` "(1, 2, )"
+--                 (show . exprToPython) (Tuple [Num 1, Num 2]) `shouldBe` "(1, 2, )"
 --             it "converts var" $ do
---                 exprToPython (Var "foo") `shouldBe` "foo"
+--                 (show . exprToPython) (Var "foo") `shouldBe` "foo"
 --             it "converts var with camel case to snake case" $ do
---                 exprToPython (Var "fooBarBaz") `shouldBe` "foo_bar_baz"
+--                 (show . exprToPython) (Var "fooBarBaz") `shouldBe` "foo_bar_baz"
 --             it "converts getItem" $ do
---                 exprToPython (GetItem "foo" (Var "x")) `shouldBe` "foo[x]"
+--                 (show . exprToPython) (GetItem "foo" (Var "x")) `shouldBe` "foo[x]"
 --             it "converts getItem with camel case" $ do
---                 exprToPython (GetItem "fooBar" (Var "x")) `shouldBe` "foo_bar[x]"
+--                 (show . exprToPython) (GetItem "fooBar" (Var "x")) `shouldBe` "foo_bar[x]"
 --             it "converts invokeMethod" $ do
---                 exprToPython (InvokeMethod (Var "a") "fill" [Num 3]) `shouldBe` "a.fill(3)"
+--                 (show . exprToPython) (InvokeMethod (Var "a") "fill" [Num 3]) `shouldBe` "a.fill(3)"
 --             it "converts invokeFunction" $ do
---                 exprToPython (InvokeFunction "range" [Num 5]) `shouldBe` "range(5)"
+--                 (show . exprToPython) (InvokeFunction "range" [Num 5]) `shouldBe` "range(5)"
 --             it "converts isTrue" $ do
---                 exprToPython (IsTrue "x") `shouldBe` "x"
+--                 (show . exprToPython) (IsTrue "x") `shouldBe` "x"
 --             it "converts ternary" $ do
---                 exprToPython (Ternary (IsTrue "x") (Num 1) (Num 2)) `shouldBe` "1 if x else 2"
+--                 (show . exprToPython) (Ternary (IsTrue "x") (Num 1) (Num 2)) `shouldBe` "1 if x else 2"
 --             it "converts ternary with camel case" $ do
---                 exprToPython (Ternary (IsTrue "fooBar") (Num 1) (Num 2)) `shouldBe` "1 if foo_bar else 2"
+--                 (show . exprToPython) (Ternary (IsTrue "fooBar") (Num 1) (Num 2)) `shouldBe` "1 if foo_bar else 2"
 --             it "converts inverted ternary" $ do
---                 exprToPython (Ternary (IsFalse "x") (Num 1) (Num 2)) `shouldBe` "1 if not x else 2"
+--                 (show . exprToPython) (Ternary (IsFalse "x") (Num 1) (Num 2)) `shouldBe` "1 if not x else 2"
 --             it "converts equals" $ do
---                 exprToPython (Equals (Var "x") (Var "y")) `shouldBe` "x.__eq__(y)"
+--                 (show . exprToPython) (Equals (Var "x") (Var "y")) `shouldBe` "x.__eq__(y)"
 --             it "converts logical and" $ do
---                 exprToPython (And (Var "x") (Var "y")) `shouldBe` "x and y"
+--                 (show . exprToPython) (And (Var "x") (Var "y")) `shouldBe` "x and y"
 --             it "converts true" $ do
---                 exprToPython True' `shouldBe` "True"
+--                 (show . exprToPython) True' `shouldBe` "True"
 --             it "converts false" $ do
---                 exprToPython False' `shouldBe` "False"
+--                 (show . exprToPython) False' `shouldBe` "False"
 --             it "converts getAttribute" $ do
---                 exprToPython (GetAttribute "n" "attr") `shouldBe` "n.attr"
+--                 (show . exprToPython) (GetAttribute "n" "attr") `shouldBe` "n.attr"
 --             it "converts intDType" $ do
---                 exprToPython (Var "intDType") `shouldBe` "int"
+--                 (show . exprToPython) (Var "intDType") `shouldBe` "int"
 
 --             it "converts varDecl" $ do
---                 stmtToPython (VarDecl "x" (Num 42)) `shouldBe` "x = 42"
+--                 (show . stmtToPython) (VarDecl "x" (Num 42)) `shouldBe` "x = 42"
 --             it "converts assign" $ do
---                 stmtToPython (Assign "x" (Num 42)) `shouldBe` "x = 42"
+--                 (show . stmtToPython) (Assign "x" (Num 42)) `shouldBe` "x = 42"
 --             it "converts assign with camel case" $ do
---                 stmtToPython (Assign "xFoo" (Num 42)) `shouldBe` "x_foo = 42"
+--                 (show . stmtToPython) (Assign "xFoo" (Num 42)) `shouldBe` "x_foo = 42"
 --             it "converts setItem" $ do
---                 stmtToPython (SetItem "volume" (Var "x") (Num 42)) `shouldBe` "volume[x] = 42"
+--                 (show . stmtToPython) (SetItem "volume" (Var "x") (Num 42)) `shouldBe` "volume[x] = 42"
 --             it "converts setItem with camel case" $ do
---                 stmtToPython (SetItem "volumeList" (Var "x") (Num 42)) `shouldBe` "volume_list[x] = 42"
+--                 (show . stmtToPython) (SetItem "volumeList" (Var "x") (Num 42)) `shouldBe` "volume_list[x] = 42"
 --             it "converts rangeFor without body" $ do
---                 stmtToPython (RangeFor (Var "n") (emptyRangeArgs { stop = (Num 5) }) []) `shouldBe` "for n in range(5):\n\tpass"
+--                 (show . stmtToPython) (RangeFor (Var "n") (emptyRangeArgs { stop = (Num 5) }) []) `shouldBe` "for n in range(5):\n    pass"
 --             it "converts rangeFor with two args" $ do
---                 stmtToPython (RangeFor (Var "n") (emptyRangeArgs { start = Just (Num 3), stop = Num 5 }) []) `shouldBe` "for n in range(3, 5):\n\tpass"
+--                 (show . stmtToPython) (RangeFor (Var "n") (emptyRangeArgs { start = Just (Num 3), stop = Num 5 }) []) `shouldBe` "for n in range(3, 5):\n    pass"
 --             it "converts rangeFor with three args" $ do
---                 stmtToPython (RangeFor (Var "n") (emptyRangeArgs { start = Just (Num 3), stop = Num 5, step = Just (Num 2) }) []) `shouldBe` "for n in range(3, 5, 2):\n\tpass"
+--                 (show . stmtToPython) (RangeFor (Var "n") (emptyRangeArgs { start = Just (Num 3), stop = Num 5, step = Just (Num 2) }) []) `shouldBe` "for n in range(3, 5, 2):\n    pass"
 --             it "converts rangeFor with body" $ do
---                 stmtToPython (RangeFor (Var "n") (emptyRangeArgs { stop = (Num 5) }) [VarDecl "x" (Num 42)]) `shouldBe` "for n in range(5):\n\tx = 42"
+--                 (show . stmtToPython) (RangeFor (Var "n") (emptyRangeArgs { stop = (Num 5) }) [VarDecl "x" (Num 42)]) `shouldBe` "for n in range(5):\n    x = 42"
 --             it "converts continue" $ do
---                 stmtToPython Continue `shouldBe` "continue"
+--                 (show . stmtToPython) Continue `shouldBe` "continue"
 --             it "converts break" $ do
---                 stmtToPython Break `shouldBe` "break"
+--                 (show . stmtToPython) Break `shouldBe` "break"
 --             it "converts while" $ do
---                 stmtToPython (While (IsTrue "p") [VarDecl "x" (Num 42)]) `shouldBe` "while p:\n\tx = 42"
+--                 (show . stmtToPython) (While (IsTrue "p") [VarDecl "x" (Num 42)]) `shouldBe` "while p:\n    x = 42"
 --             it "converts if" $ do
---                 stmtToPython (If (IsTrue "p") [VarDecl "x" (Num 42)]) `shouldBe` "if p:\n\tx = 42"
+--                 (show . stmtToPython) (If (IsTrue "p") [VarDecl "x" (Num 42)]) `shouldBe` "if p:\n    x = 42"
 --             it "converts stmts" $ do
---                 stmtsToPython [VarDecl "x" (Num 42), VarDecl "y" (Num 43)] `shouldBe` "x = 42\ny = 43\n"
+--                 (show . stmtsToPython) [VarDecl "x" (Num 42), VarDecl "y" (Num 43)] `shouldBe` "x = 42\ny = 43"
 
 -- --     -- putStrLn str
 -- --     -- parseTestLog False (javaStmts <* eof) str
