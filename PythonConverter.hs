@@ -19,6 +19,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import Prettyprinter hiding (braces, equals, parens)
 import qualified Prettyprinter as PP
+import System.Environment (getArgs)
 
 instance Monad m => Stream Text m Char where
     uncons = pure . T.uncons
@@ -371,12 +372,12 @@ stmtToJulia (VarDecl _ (FunRef _)) = "" -- these are boilerplate that's only nec
 stmtToJulia (VarDecl n expr) = exprToJulia 0 (Var n) <> " = " <> exprToJulia 0 expr
 stmtToJulia (Assign n expr) = exprToJulia 0 (Var n) <> " = " <> exprToJulia 0 expr
 stmtToJulia (SetItem n x y) = exprToJulia 0 (Var n) <> "[(" <> exprToJulia 0 x <> ") + 1] = " <> exprToJulia 0 y
-stmtToJulia (RangeFor loopVar rangeArgs stmts) = "for " <> exprToJulia 0 loopVar <> " in " <> (pretty . T.unpack) (rangeArgsToJulia rangeArgs) <> "\n" <> body <> "end" where
+stmtToJulia (RangeFor loopVar rangeArgs stmts) = "for " <> exprToJulia 0 loopVar <> " in " <> (pretty . T.unpack) (rangeArgsToJulia rangeArgs) <> "\n" <> body <> "\n" <> "\n" <> "end" where
     body = case stmts of
         [] -> ""
         (_:_) -> vsep . map stmtToJulia $ stmts
-stmtToJulia (While cond body) = "while " <> exprToJulia 0 cond <> "\n" <> (indent 4 . vsep . map stmtToJulia) body <> "end"
-stmtToJulia (If cond body) = "if " <> exprToJulia 0 cond <> "\n" <> (indent 4 . vsep . map stmtToJulia) body <> "end"
+stmtToJulia (While cond body) = "while " <> exprToJulia 0 cond <> "\n" <> (indent 4 . vsep . map stmtToJulia) body <> "\n" <> "end"
+stmtToJulia (If cond body) = "if " <> exprToJulia 0 cond <> "\n" <> (indent 4 . vsep . map stmtToJulia) body <> "\n" <> "end"
 stmtToJulia Continue = "continue"
 stmtToJulia Break = "break"
 stmtToJulia (ExprAsStmt e) = exprToJulia 0 e
@@ -448,7 +449,8 @@ exprToJulia _ (FunCall n xs) = (pretty . T.unpack . nameToJulia) n <> "(" <> (pr
 exprToJulia _ (Tuple xs) = "(" <> (pretty . T.unpack . exprsToJulia 0) xs <> ", )"
 exprToJulia _ (Var "intDType") = "int"
 exprToJulia _ (Var n) = (pretty . T.unpack . camelToSnake) n
-exprToJulia _ (GetItem n x) = let addPrec = jlPrec "+" in exprToJulia 0 (Var n) <> "[" <> exprToJulia 0 (InvokeMethod x "__add__" [Num 1]) <> "]"
+exprToJulia _ (GetItem n (Tuple xs)) = exprToJulia 0 (Var n) <> "[" <> (pretty . T.unpack . exprsToJulia 0 . reverse) (map (\x -> InvokeMethod x "__add__" [Num 1]) $ xs) <> "]"
+exprToJulia _ (GetItem n x) = exprToJulia 0 (Var n) <> "[" <> exprToJulia 0 (InvokeMethod x "__add__" [Num 1]) <> "]"
 exprToJulia d (InvokeMethod x n xs) = case dunders M.!? n of
     Just op -> 
     -- TODO: Take into account right-associative operators
@@ -542,11 +544,12 @@ main = do
 --         Right res' -> putStrLn . stmtToPython $ res'
 --     -- parseTestLog False (opExpr <* eof) "cond ? x : y"
 
+    args <- getArgs
     str <- TIO.getContents
     let res = parse (javaStmts <* eof) "" str
     case res of
         Left err -> error $ show err
-        Right res' -> print . stmtsToPython $ res'
+        Right res' -> print . (if null args then stmtsToPython else stmtsToJulia) $ res'
     -- parseTestLog False (opExpr <* eof) "cond ? x : y"
 
 --     hspec $ do
@@ -694,6 +697,10 @@ main = do
 --                 (show . exprToJulia 0) (GetItem "foo" (InvokeMethod (Var "x") "__add__" [Num 42])) `shouldBe` "foo[x + 42 + 1]"
 --             it "adds necessary parentheses" $ do
 --                 (show . exprToJulia 0) (GetItem "foo" (InvokeMethod (Var "x") "__eq__" [Num 42])) `shouldBe` "foo[(x == 42) + 1]"
+--             it "adds one to tuple elements" $ do
+--                 (show . exprToJulia 0) (GetItem "foo" (Tuple [Var "x"])) `shouldBe` "foo[x + 1]"
+--             it "reverses tuple elements" $ do
+--                 (show . exprToJulia 0) (GetItem "foo" (Tuple [Var "x", Var "y"])) `shouldBe` "foo[y + 1, x + 1]"
 -- --     -- putStrLn str
 -- --     -- parseTestLog False (javaStmts <* eof) str
 -- --     -- let out = do
