@@ -393,90 +393,11 @@ camelToSnake = T.pack . camelToSnake' . T.unpack where
     camelToSnake' (x : xs) | isUpper x = '_' : toLower x : camelToSnake' xs
     camelToSnake' (x : xs) = x : camelToSnake' xs
 
-exprToJulia :: Precedence -> JavaExpr -> Doc ann
-exprToJulia _ (Num x) = pretty x
-exprToJulia _ None = "nothing"
-exprToJulia _ (FunRef n) = (pretty . T.unpack) n
-exprToJulia _ (FunCall n xs) = (pretty . T.unpack . nameToJulia) n <> "(" <> (pretty . T.unpack . exprsToJulia 0) xs <> ")" where
-    nameToJulia :: Text -> Text
-    nameToJulia = T.pack . nameToJulia' . T.unpack where
-        nameToJulia' ('D':'o':'t':c:rest) = '.' : toLower c : nameToJulia' rest
-        nameToJulia' (c:rest)             = c : nameToJulia' rest
-        nameToJulia' []                   = []
-exprToJulia _ (Tuple xs) = "(" <> (pretty . T.unpack . exprsToJulia 0) xs <> ", )"
-exprToJulia _ (Var "intDType") = "int"
-exprToJulia _ (Var n) = (pretty . T.unpack . camelToSnake) n
-exprToJulia _ (GetItem n x) = exprToJulia 0 (Var n) <> "[(" <> exprToJulia 0 x <> ") + 1]"
-exprToJulia d (InvokeMethod x n xs) = case dunders M.!? n of
-    Just op -> 
-        let prec = pyPrec op in pparen (d > prec) $ exprToJulia (prec + 1) x <+> (pretty . T.unpack) op <+> (pretty . T.unpack . exprsToJulia (prec + 1)) xs
-    Nothing -> exprToJulia 0 x <> "." <> (pretty . T.unpack) n <> PP.parens (pretty . T.unpack . exprsToJulia 0 $ xs)
-  where
-    pparen True  = PP.parens
-    pparen False = id
-exprToJulia _ (InvokeFunction n xs) = (pretty . T.unpack) n <> "(" <> (pretty . T.unpack . exprsToJulia 0) xs <> ")"
-exprToJulia _ (IsTrue x) = exprToJulia 0 (Var x)
-exprToJulia _ (IsFalse x) = "!" <> exprToJulia 0 (Var x)
-exprToJulia _ (Equals x y) = exprToJulia 0 x <> " == " <> exprToJulia 0 y
-exprToJulia _ (Ternary x y z) = exprToJulia 0 x <> " ? " <> exprToJulia 0 y <> " : " <> exprToJulia 0 z
-exprToJulia _ (And x y) = exprToJulia 0 x <> " && " <> exprToJulia 0 y
-exprToJulia _ True' = "true"
-exprToJulia _ False' = "false"
-exprToJulia _ (GetAttribute n attr) = (pretty . T.unpack) n <> "." <> (pretty . T.unpack) attr
-
 type Precedence = Int
-exprToPython :: Precedence -> JavaExpr -> Doc ann
-exprToPython _ (Num x) = pretty x
-exprToPython _ None = "None"
-exprToPython _ (FunRef n) = pretty . T.unpack $ n
-exprToPython _ (FunCall n xs) = (pretty . T.unpack) (nameToPython n) <> PP.parens (exprsToPython 0 xs) where
-    nameToPython :: Text -> Text
-    nameToPython = T.pack . nameToPython' . T.unpack where
-        nameToPython' ('D':'o':'t':c:rest) = '.' : toLower c : nameToPython' rest
-        nameToPython' (c:rest)             = c : nameToPython' rest
-        nameToPython' []                   = []
-exprToPython _ (Tuple xs) = "(" <> exprsToPython 0 xs <> ", )"
-exprToPython _ (Var "intDType") = "int"
-exprToPython _ (Var n) = pretty . T.unpack $ camelToSnake n
-exprToPython _ (GetItem n x) = exprToPython 0 (Var n) <> "[" <> exprToPython 0 x <> "]"
-exprToPython d (InvokeMethod x n xs) = case dunders M.!? n of
-    Just op -> 
-        let prec = pyPrec op in pparen (d > prec) $ exprToPython (prec + 1) x <+> (pretty . T.unpack) op <+> exprsToPython (prec + 1) xs
-    Nothing -> exprToPython 0 x <> "." <> (pretty . T.unpack) n <> PP.parens (exprsToPython 0 xs)
-  where
-    pparen True  = PP.parens
-    pparen False = id
-exprToPython d (InvokeFunction n xs) = pretty (T.unpack n) <> PP.parens (exprsToPython 0 xs)
-exprToPython _ (IsTrue x) = exprToPython 0 (Var x)
-exprToPython _ (IsFalse x) = "not " <> exprToPython 0 (Var x)
-exprToPython _ (Equals x y) = exprToPython 0 x <> ".__eq__(" <> exprToPython 0 y <> ")"
-exprToPython _ (Ternary x y z) = exprToPython 0 y <+> "if" <+> exprToPython 0 x <+> "else" <+> exprToPython 0 z
-exprToPython _ (And x y) = exprToPython 0 x <+> "and" <+> exprToPython 0 y
-exprToPython _ True' = "True"
-exprToPython _ False' = "False"
-exprToPython _ (GetAttribute n attr) = (pretty . T.unpack) (n <> "." <> attr)
 
-exprsToPython :: Precedence -> [JavaExpr] -> Doc ann
-exprsToPython d = hsep . punctuate "," . map (exprToPython d)
-
-exprsToJulia :: Precedence -> [JavaExpr] -> Text
-exprsToJulia d = T.intercalate ", " . map (T.show . exprToJulia d)
-
--- table of only the binary operators
-pythonTable :: [[Text]]
-pythonTable = [
-    ["**"]
-    , ["*", "@", "/", "//", "%"]
-    , ["+", "-"]
-    , ["<<", ">>"]
-    , ["&"]
-    , ["^"]
-    , ["|"]
-    , ["in", "not in", "is", "is not", "<", "<=", ">", ">=", "!=", "=="]
-    , ["and"]
-    , ["or"]
-    , [":="]
-    ]
+pparen :: Bool -> Doc ann -> Doc ann
+pparen True  = PP.parens
+pparen False = id
 
 -- table of only the ASCII binary operators
 juliaTable :: [[Text]]
@@ -498,6 +419,93 @@ juliaTable = [
     , ["=", "+=", "-=", "*=", "/=", "//=", "\\=", "^=", "%=", "|=", "&=", "<<=", ">>=", ">>>="] -- AssocRight
     ]
 
+jlPrec :: Text -> Int
+jlPrec x = length juliaTable - fromMaybe (error ("unknown operator: " <> T.unpack x)) (L.findIndex (x `elem`) juliaTable)
+
+exprToJulia :: Precedence -> JavaExpr -> Doc ann
+exprToJulia _ (Num x) = pretty x
+exprToJulia _ None = "nothing"
+exprToJulia _ (FunRef n) = (pretty . T.unpack) n
+exprToJulia _ (FunCall n xs) = (pretty . T.unpack . nameToJulia) n <> "(" <> (pretty . T.unpack . exprsToJulia 0) xs <> ")" where
+    nameToJulia :: Text -> Text
+    nameToJulia = T.pack . nameToJulia' . T.unpack where
+        nameToJulia' ('D':'o':'t':c:rest) = '.' : toLower c : nameToJulia' rest
+        nameToJulia' (c:rest)             = c : nameToJulia' rest
+        nameToJulia' []                   = []
+exprToJulia _ (Tuple xs) = "(" <> (pretty . T.unpack . exprsToJulia 0) xs <> ", )"
+exprToJulia _ (Var "intDType") = "int"
+exprToJulia _ (Var n) = (pretty . T.unpack . camelToSnake) n
+exprToJulia _ (GetItem n x) = let addPrec = jlPrec "+" in exprToJulia 0 (Var n) <> "[" <> (exprToJulia addPrec x) <> " + 1]"
+exprToJulia d (InvokeMethod x n xs) = case dunders M.!? n of
+    Just op -> 
+        let prec = jlPrec op in pparen (d > prec) $ exprToJulia (prec + 1) x <+> (pretty . T.unpack) op <+> (pretty . T.unpack . exprsToJulia (prec + 1)) xs
+    Nothing -> exprToJulia 0 x <> "." <> (pretty . T.unpack) n <> PP.parens (pretty . T.unpack . exprsToJulia 0 $ xs)
+  where
+    pparen True  = PP.parens
+    pparen False = id
+exprToJulia _ (InvokeFunction n xs) = (pretty . T.unpack) n <> "(" <> (pretty . T.unpack . exprsToJulia 0) xs <> ")"
+exprToJulia _ (IsTrue x) = exprToJulia 0 (Var x)
+exprToJulia _ (IsFalse x) = "!" <> exprToJulia 0 (Var x)
+exprToJulia _ (Equals x y) = exprToJulia 0 x <> " == " <> exprToJulia 0 y
+exprToJulia _ (Ternary x y z) = exprToJulia 0 x <> " ? " <> exprToJulia 0 y <> " : " <> exprToJulia 0 z
+exprToJulia _ (And x y) = exprToJulia 0 x <> " && " <> exprToJulia 0 y
+exprToJulia _ True' = "true"
+exprToJulia _ False' = "false"
+exprToJulia _ (GetAttribute n attr) = (pretty . T.unpack) n <> "." <> (pretty . T.unpack) attr
+
+-- table of only the binary operators
+pythonTable :: [[Text]]
+pythonTable = [
+    ["**"]
+    , ["*", "@", "/", "//", "%"]
+    , ["+", "-"]
+    , ["<<", ">>"]
+    , ["&"]
+    , ["^"]
+    , ["|"]
+    , ["in", "not in", "is", "is not", "<", "<=", ">", ">=", "!=", "=="]
+    , ["and"]
+    , ["or"]
+    , [":="]
+    ]
+
+pyPrec :: Text -> Int
+pyPrec x = length pythonTable - fromMaybe (error ("unknown operator: " <> T.unpack x)) (L.findIndex (x `elem`) pythonTable)
+
+exprToPython :: Precedence -> JavaExpr -> Doc ann
+exprToPython _ (Num x) = pretty x
+exprToPython _ None = "None"
+exprToPython _ (FunRef n) = pretty . T.unpack $ n
+exprToPython _ (FunCall n xs) = (pretty . T.unpack) (nameToPython n) <> PP.parens (exprsToPython 0 xs) where
+    nameToPython :: Text -> Text
+    nameToPython = T.pack . nameToPython' . T.unpack where
+        nameToPython' ('D':'o':'t':c:rest) = '.' : toLower c : nameToPython' rest
+        nameToPython' (c:rest)             = c : nameToPython' rest
+        nameToPython' []                   = []
+exprToPython _ (Tuple xs) = "(" <> exprsToPython 0 xs <> ", )"
+exprToPython _ (Var "intDType") = "int"
+exprToPython _ (Var n) = pretty . T.unpack $ camelToSnake n
+exprToPython _ (GetItem n x) = exprToPython 0 (Var n) <> "[" <> exprToPython 0 x <> "]"
+exprToPython d (InvokeMethod x n xs) = case dunders M.!? n of
+    Just op -> 
+        let prec = pyPrec op in pparen (d > prec) $ exprToPython (prec + 1) x <+> (pretty . T.unpack) op <+> exprsToPython (prec + 1) xs
+    Nothing -> exprToPython 0 x <> "." <> (pretty . T.unpack) n <> PP.parens (exprsToPython 0 xs)
+exprToPython d (InvokeFunction n xs) = pretty (T.unpack n) <> PP.parens (exprsToPython 0 xs)
+exprToPython _ (IsTrue x) = exprToPython 0 (Var x)
+exprToPython _ (IsFalse x) = "not " <> exprToPython 0 (Var x)
+exprToPython _ (Equals x y) = exprToPython 0 x <> ".__eq__(" <> exprToPython 0 y <> ")"
+exprToPython _ (Ternary x y z) = exprToPython 0 y <+> "if" <+> exprToPython 0 x <+> "else" <+> exprToPython 0 z
+exprToPython _ (And x y) = exprToPython 0 x <+> "and" <+> exprToPython 0 y
+exprToPython _ True' = "True"
+exprToPython _ False' = "False"
+exprToPython _ (GetAttribute n attr) = (pretty . T.unpack) (n <> "." <> attr)
+
+exprsToPython :: Precedence -> [JavaExpr] -> Doc ann
+exprsToPython d = hsep . punctuate "," . map (exprToPython d)
+
+exprsToJulia :: Precedence -> [JavaExpr] -> Text
+exprsToJulia d = T.intercalate ", " . map (T.show . exprToJulia d)
+
 dunders :: Map Text Text
 dunders = M.fromList [
     ("__add__", "+")
@@ -510,9 +518,6 @@ dunders = M.fromList [
     , ("__lt__", "<")
     , ("__gt__", ">")
     ]
-
-pyPrec :: Text -> Int
-pyPrec x = length pythonTable - fromMaybe (error ("unknown operator: " <> T.unpack x)) (L.findIndex (x `elem`) pythonTable)
 
 parseExpr :: Text -> Either ParseError JavaExpr
 parseExpr str = parse (javaExpr <* eof) "" str
@@ -609,47 +614,47 @@ main = do
 
 --         describe "Python conversion" $ do
 --             it "converts num" $ do
---                 (show . exprToPython) (Num 42) `shouldBe` "42"
+--                 (show . exprToPython 0) (Num 42) `shouldBe` "42"
 --             it "converts none" $ do
---                 (show . exprToPython) (None) `shouldBe` "None"
+--                 (show . exprToPython 0) (None) `shouldBe` "None"
 --             it "converts funRef" $ do
---                 (show . exprToPython) (FunRef "np.empty") `shouldBe` "np.empty"
+--                 (show . exprToPython 0) (FunRef "np.empty") `shouldBe` "np.empty"
 --             it "converts funCall" $ do
---                 (show . exprToPython) (FunCall "npDotEmpty" [Num 3]) `shouldBe` "np.empty(3)"
+--                 (show . exprToPython 0) (FunCall "npDotEmpty" [Num 3]) `shouldBe` "np.empty(3)"
 --             it "converts tuple" $ do
---                 (show . exprToPython) (Tuple [Num 1, Num 2]) `shouldBe` "(1, 2, )"
+--                 (show . exprToPython 0) (Tuple [Num 1, Num 2]) `shouldBe` "(1, 2, )"
 --             it "converts var" $ do
---                 (show . exprToPython) (Var "foo") `shouldBe` "foo"
+--                 (show . exprToPython 0) (Var "foo") `shouldBe` "foo"
 --             it "converts var with camel case to snake case" $ do
---                 (show . exprToPython) (Var "fooBarBaz") `shouldBe` "foo_bar_baz"
+--                 (show . exprToPython 0) (Var "fooBarBaz") `shouldBe` "foo_bar_baz"
 --             it "converts getItem" $ do
---                 (show . exprToPython) (GetItem "foo" (Var "x")) `shouldBe` "foo[x]"
+--                 (show . exprToPython 0) (GetItem "foo" (Var "x")) `shouldBe` "foo[x]"
 --             it "converts getItem with camel case" $ do
---                 (show . exprToPython) (GetItem "fooBar" (Var "x")) `shouldBe` "foo_bar[x]"
+--                 (show . exprToPython 0) (GetItem "fooBar" (Var "x")) `shouldBe` "foo_bar[x]"
 --             it "converts invokeMethod" $ do
---                 (show . exprToPython) (InvokeMethod (Var "a") "fill" [Num 3]) `shouldBe` "a.fill(3)"
+--                 (show . exprToPython 0) (InvokeMethod (Var "a") "fill" [Num 3]) `shouldBe` "a.fill(3)"
 --             it "converts invokeFunction" $ do
---                 (show . exprToPython) (InvokeFunction "range" [Num 5]) `shouldBe` "range(5)"
+--                 (show . exprToPython 0) (InvokeFunction "range" [Num 5]) `shouldBe` "range(5)"
 --             it "converts isTrue" $ do
---                 (show . exprToPython) (IsTrue "x") `shouldBe` "x"
+--                 (show . exprToPython 0) (IsTrue "x") `shouldBe` "x"
 --             it "converts ternary" $ do
---                 (show . exprToPython) (Ternary (IsTrue "x") (Num 1) (Num 2)) `shouldBe` "1 if x else 2"
+--                 (show . exprToPython 0) (Ternary (IsTrue "x") (Num 1) (Num 2)) `shouldBe` "1 if x else 2"
 --             it "converts ternary with camel case" $ do
---                 (show . exprToPython) (Ternary (IsTrue "fooBar") (Num 1) (Num 2)) `shouldBe` "1 if foo_bar else 2"
+--                 (show . exprToPython 0) (Ternary (IsTrue "fooBar") (Num 1) (Num 2)) `shouldBe` "1 if foo_bar else 2"
 --             it "converts inverted ternary" $ do
---                 (show . exprToPython) (Ternary (IsFalse "x") (Num 1) (Num 2)) `shouldBe` "1 if not x else 2"
+--                 (show . exprToPython 0) (Ternary (IsFalse "x") (Num 1) (Num 2)) `shouldBe` "1 if not x else 2"
 --             it "converts equals" $ do
---                 (show . exprToPython) (Equals (Var "x") (Var "y")) `shouldBe` "x.__eq__(y)"
+--                 (show . exprToPython 0) (Equals (Var "x") (Var "y")) `shouldBe` "x.__eq__(y)"
 --             it "converts logical and" $ do
---                 (show . exprToPython) (And (Var "x") (Var "y")) `shouldBe` "x and y"
+--                 (show . exprToPython 0) (And (Var "x") (Var "y")) `shouldBe` "x and y"
 --             it "converts true" $ do
---                 (show . exprToPython) True' `shouldBe` "True"
+--                 (show . exprToPython 0) True' `shouldBe` "True"
 --             it "converts false" $ do
---                 (show . exprToPython) False' `shouldBe` "False"
+--                 (show . exprToPython 0) False' `shouldBe` "False"
 --             it "converts getAttribute" $ do
---                 (show . exprToPython) (GetAttribute "n" "attr") `shouldBe` "n.attr"
+--                 (show . exprToPython 0) (GetAttribute "n" "attr") `shouldBe` "n.attr"
 --             it "converts intDType" $ do
---                 (show . exprToPython) (Var "intDType") `shouldBe` "int"
+--                 (show . exprToPython 0) (Var "intDType") `shouldBe` "int"
 
 --             it "converts varDecl" $ do
 --                 (show . stmtToPython) (VarDecl "x" (Num 42)) `shouldBe` "x = 42"
