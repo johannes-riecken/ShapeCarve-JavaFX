@@ -18,13 +18,13 @@ sh convert.sh && python3 main.py >|/tmp/volume_py.txt && git diff /tmp/volume{,_
 TODOs:
 
 - [ ] Add conversion to Julia
-- [ ] Create manual quiz for deriving StaticArrays.jl meta-programming
-- [ ] Create manual quiz for deriving NumPy types
-- [ ] Migrate to using my coordinate conventions, i.e. get rid of the transposition in the beginning
-- [ ] Vectorize the Python code
+- [x] Create manual quiz for deriving StaticArrays.jl meta-programming
+- [x] Create manual quiz for deriving NumPy types
+- [x] Migrate to using my coordinate conventions, i.e. get rid of the transposition in the beginning
+- [x] Vectorize the Python code
 - [ ] Add a conversion in the Haskell code to rewrite NumPy array indexing to regular Python code
 - [ ] Add parser from the generated Python code back to the AST
 - [ ] Add pretty-printer from the AST back to Detroit code
-- [ ] Use pretty-printing library
+- [x] Use pretty-printing library
 - [ ] Return multiple results (possibly zero if no volume consistent with the views was found)
 - [ ] Use QuickCheck to find a minimal volume that fails the invariant that the volume is consistent with the views
