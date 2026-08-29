@@ -422,6 +422,19 @@ juliaTable = [
 jlPrec :: Text -> Int
 jlPrec x = length juliaTable - fromMaybe (error ("unknown operator: " <> T.unpack x)) (L.findIndex (x `elem`) juliaTable)
 
+dunders :: Map Text Text
+dunders = M.fromList [
+    ("__add__", "+")
+    , ("__mod__", "%")
+    , ("__sub__", "-")
+    , ("__mul__", "*")
+    , ("__eq__", "==")
+    , ("__ne__", "!=")
+    , ("__le__", "<=")
+    , ("__lt__", "<")
+    , ("__gt__", ">")
+    ]
+
 exprToJulia :: Precedence -> JavaExpr -> Doc ann
 exprToJulia _ (Num x) = pretty x
 exprToJulia _ None = "nothing"
@@ -435,10 +448,11 @@ exprToJulia _ (FunCall n xs) = (pretty . T.unpack . nameToJulia) n <> "(" <> (pr
 exprToJulia _ (Tuple xs) = "(" <> (pretty . T.unpack . exprsToJulia 0) xs <> ", )"
 exprToJulia _ (Var "intDType") = "int"
 exprToJulia _ (Var n) = (pretty . T.unpack . camelToSnake) n
-exprToJulia _ (GetItem n x) = let addPrec = jlPrec "+" in exprToJulia 0 (Var n) <> "[" <> (exprToJulia addPrec x) <> " + 1]"
+exprToJulia _ (GetItem n x) = let addPrec = jlPrec "+" in exprToJulia 0 (Var n) <> "[" <> exprToJulia 0 (InvokeMethod x "__add__" [Num 1]) <> "]"
 exprToJulia d (InvokeMethod x n xs) = case dunders M.!? n of
     Just op -> 
-        let prec = jlPrec op in pparen (d > prec) $ exprToJulia (prec + 1) x <+> (pretty . T.unpack) op <+> (pretty . T.unpack . exprsToJulia (prec + 1)) xs
+    -- TODO: Take into account right-associative operators
+        let prec = jlPrec op in pparen (d > prec) $ exprToJulia prec x <+> (pretty . T.unpack) op <+> (pretty . T.unpack . exprsToJulia (prec + 1)) xs
     Nothing -> exprToJulia 0 x <> "." <> (pretty . T.unpack) n <> PP.parens (pretty . T.unpack . exprsToJulia 0 $ xs)
   where
     pparen True  = PP.parens
@@ -505,19 +519,6 @@ exprsToPython d = hsep . punctuate "," . map (exprToPython d)
 
 exprsToJulia :: Precedence -> [JavaExpr] -> Text
 exprsToJulia d = T.intercalate ", " . map (T.show . exprToJulia d)
-
-dunders :: Map Text Text
-dunders = M.fromList [
-    ("__add__", "+")
-    , ("__mod__", "%")
-    , ("__sub__", "-")
-    , ("__mul__", "*")
-    , ("__eq__", "==")
-    , ("__ne__", "!=")
-    , ("__le__", "<=")
-    , ("__lt__", "<")
-    , ("__gt__", ">")
-    ]
 
 parseExpr :: Text -> Either ParseError JavaExpr
 parseExpr str = parse (javaExpr <* eof) "" str
@@ -685,6 +686,14 @@ main = do
 --             it "converts stmts" $ do
 --                 (show . stmtsToPython) [VarDecl "x" (Num 42), VarDecl "y" (Num 43)] `shouldBe` "x = 42\ny = 43"
 
+--         describe "Julia conversion" $ do
+--             describe "getItem" $ do
+--                 it "converts getItem" $ do
+--                     (show . exprToJulia 0) (GetItem "foo" (Var "x")) `shouldBe` "foo[x + 1]"
+--             it "avoids unnecessary parentheses" $ do
+--                 (show . exprToJulia 0) (GetItem "foo" (InvokeMethod (Var "x") "__add__" [Num 42])) `shouldBe` "foo[x + 42 + 1]"
+--             it "adds necessary parentheses" $ do
+--                 (show . exprToJulia 0) (GetItem "foo" (InvokeMethod (Var "x") "__eq__" [Num 42])) `shouldBe` "foo[(x == 42) + 1]"
 -- --     -- putStrLn str
 -- --     -- parseTestLog False (javaStmts <* eof) str
 -- --     -- let out = do
