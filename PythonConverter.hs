@@ -371,7 +371,7 @@ stmtToJulia :: JavaStmt -> Doc ann
 stmtToJulia (VarDecl _ (FunRef _)) = "" -- these are boilerplate that's only necessary for Detroit
 stmtToJulia (VarDecl n expr) = exprToJulia 0 (Var n) <> " = " <> exprToJulia 0 expr
 stmtToJulia (Assign n expr) = exprToJulia 0 (Var n) <> " = " <> exprToJulia 0 expr
-stmtToJulia (SetItem n x y) = exprToJulia 0 (Var n) <> "[(" <> exprToJulia 0 x <> ") + 1] = " <> exprToJulia 0 y
+stmtToJulia (SetItem n x y) = exprToJulia 0 (GetItem n x) <> " = " <> exprToJulia 0 y
 stmtToJulia (RangeFor loopVar rangeArgs stmts) = "for " <> exprToJulia 0 loopVar <> " in " <> (pretty . T.unpack) (rangeArgsToJulia rangeArgs) <> "\n" <> body <> "\n" <> "\n" <> "end" where
     body = case stmts of
         [] -> ""
@@ -693,14 +693,19 @@ main = do
 --             describe "getItem" $ do
 --                 it "converts getItem" $ do
 --                     (show . exprToJulia 0) (GetItem "foo" (Var "x")) `shouldBe` "foo[x + 1]"
---             it "avoids unnecessary parentheses" $ do
---                 (show . exprToJulia 0) (GetItem "foo" (InvokeMethod (Var "x") "__add__" [Num 42])) `shouldBe` "foo[x + 42 + 1]"
---             it "adds necessary parentheses" $ do
---                 (show . exprToJulia 0) (GetItem "foo" (InvokeMethod (Var "x") "__eq__" [Num 42])) `shouldBe` "foo[(x == 42) + 1]"
---             it "adds one to tuple elements" $ do
---                 (show . exprToJulia 0) (GetItem "foo" (Tuple [Var "x"])) `shouldBe` "foo[x + 1]"
---             it "reverses tuple elements" $ do
---                 (show . exprToJulia 0) (GetItem "foo" (Tuple [Var "x", Var "y"])) `shouldBe` "foo[y + 1, x + 1]"
+--                 it "avoids unnecessary parentheses" $ do
+--                     (show . exprToJulia 0) (GetItem "foo" (InvokeMethod (Var "x") "__add__" [Num 42])) `shouldBe` "foo[x + 42 + 1]"
+--                 it "adds necessary parentheses" $ do
+--                     (show . exprToJulia 0) (GetItem "foo" (InvokeMethod (Var "x") "__eq__" [Num 42])) `shouldBe` "foo[(x == 42) + 1]"
+--                 it "adds one to tuple elements" $ do
+--                     (show . exprToJulia 0) (GetItem "foo" (Tuple [Var "x"])) `shouldBe` "foo[x + 1]"
+--                 it "reverses tuple elements" $ do
+--                     (show . exprToJulia 0) (GetItem "foo" (Tuple [Var "x", Var "y"])) `shouldBe` "foo[y + 1, x + 1]"
+--             describe "setItem" $ do
+--                 it "converts setItem" $ do
+--                     (show . stmtToJulia) (SetItem "foo" (InvokeMethod (Var "x") "__eq__" [Num 7]) (Num 42)) `shouldBe` "foo[(x == 7) + 1] = 42"
+--                 it "avoids unnecessary parentheses" $ do
+--                     (show . stmtToJulia) (SetItem "foo" (Var "x") (Num 42)) `shouldBe` "foo[x + 1] = 42"
 -- --     -- putStrLn str
 -- --     -- parseTestLog False (javaStmts <* eof) str
 -- --     -- let out = do
